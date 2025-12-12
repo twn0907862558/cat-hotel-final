@@ -194,6 +194,7 @@ export default function App() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false); // 新增：防止重複提交狀態
 
   const [bookingForm, setBookingForm] = useState({
     ownerName: '', petName: '', phone: '', startDate: formatDate(new Date()), endDate: '', 
@@ -299,6 +300,7 @@ export default function App() {
     if (!roomId) { roomId = '101'; type = 'small'; }
     setSelectedRoom({ id: roomId, type });
     setFormError('');
+    setIsSubmitting(false); // 重置提交狀態
 
     if (booking) {
         setEditingBookingId(booking.id);
@@ -333,16 +335,19 @@ export default function App() {
   };
 
   const handleBookingSubmit = async () => {
+    setFormError('');
+    if (!bookingForm.ownerName || !bookingForm.petName) { 
+        setFormError('請填寫完整資訊 (飼主與寵物名)'); 
+        return; 
+    }
+    
+    setIsSubmitting(true); // 開始提交，鎖定按鈕
+
     try {
-        if (!bookingForm.ownerName || !bookingForm.petName) { 
-            setFormError('請填寫完整資訊'); 
-            return; 
-        }
-        
-        // Conflict Check (Fix: strictly exclude current editing ID)
+        // Conflict Check (Strictly exclude current editing ID string vs string)
         const conflict = bookings.find(b => {
-            // 如果是編輯模式，先排除自己
-            if (editingBookingId && b.id === editingBookingId) return false;
+            // 如果是編輯模式，先排除自己 (轉字串比較最保險)
+            if (editingBookingId && String(b.id) === String(editingBookingId)) return false;
             
             return (
                 b.roomId === selectedRoom.id && 
@@ -351,7 +356,8 @@ export default function App() {
         });
 
         if (conflict) { 
-            setFormError(`此時段 (${conflict.startDate} ~ ${conflict.endDate}) 房間已被 ${conflict.petName} 預約`); 
+            setFormError(`時間衝突！此時段 (${conflict.startDate}~${conflict.endDate}) 已被 ${conflict.petName} 預約`);
+            setIsSubmitting(false); // 解鎖按鈕
             return; 
         }
         
@@ -377,10 +383,12 @@ export default function App() {
         }
         
         setIsBookingModalOpen(false);
-        showToast('預約儲存成功');
+        showToast(editingBookingId ? '修改成功' : '預約成功');
     } catch (err) {
         console.error("Submit Error:", err);
-        setFormError('儲存失敗：' + err.message);
+        setFormError('儲存失敗，請檢查網路或是重整頁面');
+    } finally {
+        setIsSubmitting(false); // 無論成功失敗都解鎖
     }
   };
 
@@ -987,6 +995,14 @@ export default function App() {
                       <button onClick={()=>setIsBookingModalOpen(false)}><X className="text-[#A09890]"/></button>
                   </div>
                   <div className="p-6 overflow-y-auto custom-scrollbar space-y-5 flex-1">
+                      
+                      {/* 錯誤訊息顯示區 (新增) */}
+                      {formError && (
+                          <div className="bg-[#FFF0F0] border border-[#FADBD8] text-[#C97C7C] p-3 rounded-xl text-sm font-bold flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4"/> {formError}
+                          </div>
+                      )}
+
                       {/* Room Selection - Now always visible */}
                       <div className="space-y-1">
                           <label className="text-xs font-bold text-[#9E968E]">房號</label>
@@ -1039,7 +1055,13 @@ export default function App() {
                   <div className="p-4 border-t flex gap-3 bg-white">
                       {editingBookingId && <button onClick={()=>deleteBooking(editingBookingId)} className="p-3 bg-[#FFF0F0] text-[#C97C7C] rounded-xl"><Trash2/></button>}
                       <button onClick={()=>setIsBookingModalOpen(false)} className="flex-1 py-3 border rounded-xl text-[#A09890] font-bold">取消</button>
-                      <button onClick={handleBookingSubmit} className={`flex-1 py-3 ${THEME.primary} text-white rounded-xl font-bold shadow-md`}>確認</button>
+                      <button 
+                        onClick={handleBookingSubmit} 
+                        disabled={isSubmitting} // 提交時停用按鈕
+                        className={`flex-1 py-3 ${THEME.primary} text-white rounded-xl font-bold shadow-md flex justify-center items-center gap-2 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      >
+                          {isSubmitting ? '儲存中...' : '確認'}
+                      </button>
                   </div>
               </div>
           </div>
