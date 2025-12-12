@@ -333,25 +333,55 @@ export default function App() {
   };
 
   const handleBookingSubmit = async () => {
-    if (!bookingForm.ownerName || !bookingForm.petName) { setFormError('請填寫完整資訊'); return; }
-    const conflict = bookings.find(b => b.roomId === selectedRoom.id && isDateOverlap(b.startDate, b.endDate, bookingForm.startDate, bookingForm.endDate) && b.id !== editingBookingId);
-    if (conflict) { setFormError('此時段房間已被預約'); return; }
-    
-    const payload = {
-        ...bookingForm,
-        deposit: parseInt(bookingForm.deposit) || 0,
-        balance: parseInt(bookingForm.balance) || 0,
-        totalAmount: parseInt(bookingForm.totalAmount) || 0,
-        catCount: parseInt(bookingForm.catCount) || 1,
-        roomId: selectedRoom.id, roomType: selectedRoom.type,
-        updatedAt: new Date().toISOString()
-    };
-    
-    if (editingBookingId) await updateDoc(doc(getPath('bookings'), editingBookingId), payload);
-    else await addDoc(getPath('bookings'), { ...payload, createdBy: user?.email || 'Anon', createdAt: new Date().toISOString() });
-    
-    setIsBookingModalOpen(false);
-    showToast('預約儲存成功');
+    try {
+        if (!bookingForm.ownerName || !bookingForm.petName) { 
+            setFormError('請填寫完整資訊'); 
+            return; 
+        }
+        
+        // Conflict Check (Fix: strictly exclude current editing ID)
+        const conflict = bookings.find(b => {
+            // 如果是編輯模式，先排除自己
+            if (editingBookingId && b.id === editingBookingId) return false;
+            
+            return (
+                b.roomId === selectedRoom.id && 
+                isDateOverlap(b.startDate, b.endDate, bookingForm.startDate, bookingForm.endDate)
+            );
+        });
+
+        if (conflict) { 
+            setFormError(`此時段 (${conflict.startDate} ~ ${conflict.endDate}) 房間已被 ${conflict.petName} 預約`); 
+            return; 
+        }
+        
+        const payload = {
+            ...bookingForm,
+            deposit: parseInt(bookingForm.deposit) || 0,
+            balance: parseInt(bookingForm.balance) || 0,
+            totalAmount: parseInt(bookingForm.totalAmount) || 0,
+            catCount: parseInt(bookingForm.catCount) || 1,
+            roomId: selectedRoom.id, 
+            roomType: selectedRoom.type,
+            updatedAt: new Date().toISOString()
+        };
+        
+        if (editingBookingId) {
+            await updateDoc(doc(getPath('bookings'), editingBookingId), payload);
+        } else {
+            await addDoc(getPath('bookings'), { 
+                ...payload, 
+                createdBy: user?.email || 'Anon', 
+                createdAt: new Date().toISOString() 
+            });
+        }
+        
+        setIsBookingModalOpen(false);
+        showToast('預約儲存成功');
+    } catch (err) {
+        console.error("Submit Error:", err);
+        setFormError('儲存失敗：' + err.message);
+    }
   };
 
   const handleSaveCustomerFromBooking = async () => {
@@ -454,7 +484,7 @@ export default function App() {
   const handleLogin = async (e) => { e.preventDefault(); setAuthError(''); try { await signInWithEmailAndPassword(auth, authForm.email, authForm.password); setIsAuthModalOpen(false); showToast('登入成功', 'success'); } catch(e) { setAuthError('登入失敗'); } };
   const handleSignOut = async () => { try { await signOut(auth); showToast('已登出'); } catch(e) { console.error(e); } };
 
-  // --- Search & Filter ---
+  // --- Search & Filter (Updated) ---
   const allPetsList = useMemo(() => customers.flatMap(c => (c.pets || []).map(p => ({ petName: getPetName(p), ownerName: c.name, phone: c.phone }))), [customers]);
   const petSuggestions = useMemo(() => {
       const q = bookingForm.petName.toLowerCase();
@@ -463,6 +493,7 @@ export default function App() {
       return owner ? (owner.pets||[]).map(p => ({ petName: getPetName(p), ownerName: owner.name })) : allPetsList.filter(p => p.petName.toLowerCase().includes(q));
   }, [bookingForm.petName, bookingForm.ownerName, customers, allPetsList]);
 
+  // 更新：新增預約時，搜尋飼主 (姓名 OR 電話)
   const filteredCustomers = useMemo(() => {
     if (!bookingForm.ownerName) return [];
     const q = bookingForm.ownerName.toLowerCase();
@@ -472,6 +503,7 @@ export default function App() {
     );
   }, [bookingForm.ownerName, customers]);
 
+  // 更新：客戶列表搜尋 (姓名 OR 電話 OR 寵物)
   const filteredCustomersList = useMemo(() => {
     if (!customerSearchQuery) return customers;
     const lowerQuery = customerSearchQuery.toLowerCase();
@@ -698,9 +730,11 @@ export default function App() {
                         <h3 className="font-bold text-lg flex items-center gap-2 text-[#5C554F]">{cfg.label} <span className="text-xs text-[#A09890] font-normal border border-[#E6E2D8] px-2 py-0.5 rounded-full bg-white">NT${cfg.price}</span></h3>
                         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
                             {cfg.rooms.map(rid => {
+                                // 邏輯修改：同時尋找「入住中」以及「今日退房」的訂單
                                 const activeStay = bookings.find(x => x.roomId === rid && viewDate >= x.startDate && viewDate < x.endDate);
                                 const checkOutToday = bookings.find(x => x.roomId === rid && x.endDate === viewDate);
                                 
+                                // 決定卡片主要顯示哪一筆資料
                                 const b = activeStay || checkOutToday;
                                 
                                 const isCheckIn = activeStay && activeStay.startDate === viewDate;
@@ -717,10 +751,14 @@ export default function App() {
                                             <div>
                                                 <div className="flex gap-1 mb-1 flex-wrap">
                                                     {isCheckIn && (
-                                                        <span className="text-[10px] flex items-center gap-1 bg-[#94A89A]/20 text-[#6B9E78] px-1.5 py-0.5 rounded-full font-bold"><LogIn className="w-3 h-3"/> 入住</span>
+                                                        <span className="text-[10px] flex items-center gap-1 bg-[#94A89A]/20 text-[#6B9E78] px-1.5 py-0.5 rounded-full font-bold">
+                                                            <LogIn className="w-3 h-3"/> {b.checkInTime || '14:00'} 入
+                                                        </span>
                                                     )}
                                                     {isCheckOut && (
-                                                        <span className="text-[10px] flex items-center gap-1 bg-[#C97C7C]/20 text-[#C97C7C] px-1.5 py-0.5 rounded-full font-bold"><LogOut className="w-3 h-3"/> 退房</span>
+                                                        <span className="text-[10px] flex items-center gap-1 bg-[#C97C7C]/20 text-[#C97C7C] px-1.5 py-0.5 rounded-full font-bold">
+                                                            <LogOut className="w-3 h-3"/> {b.checkOutTime || '11:00'} 退
+                                                        </span>
                                                     )}
                                                 </div>
 
