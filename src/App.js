@@ -194,7 +194,7 @@ export default function App() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false); // 新增：防止重複提交狀態
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [bookingForm, setBookingForm] = useState({
     ownerName: '', petName: '', phone: '', startDate: formatDate(new Date()), endDate: '', 
@@ -283,13 +283,15 @@ export default function App() {
 
   // --- Form Updates ---
   const updateBooking = (field, val) => {
-      if (!selectedRoom) return;
       const next = { ...bookingForm, [field]: val };
-      if (['startDate', 'endDate', 'catCount'].includes(field)) {
+      
+      // Auto recalculate if dates or cat count change, but only if selectedRoom is present
+      if (selectedRoom && ['startDate', 'endDate', 'catCount'].includes(field)) {
           const newTotal = calculateTotal(selectedRoom.type, next.startDate, next.endDate, next.catCount);
           next.totalAmount = newTotal;
           next.balance = newTotal - (parseInt(next.deposit) || 0);
       }
+      
       if (field === 'deposit') next.balance = (parseInt(next.totalAmount) || 0) - (parseInt(val) || 0);
       if (field === 'totalAmount') next.balance = (parseInt(val) || 0) - (parseInt(next.deposit) || 0);
       setBookingForm(next);
@@ -300,14 +302,14 @@ export default function App() {
     if (!roomId) { roomId = '101'; type = 'small'; }
     setSelectedRoom({ id: roomId, type });
     setFormError('');
-    setIsSubmitting(false); // 重置提交狀態
+    setIsSubmitting(false);
 
     if (booking) {
         setEditingBookingId(booking.id);
         setBookingForm({
-            ownerName: booking.ownerName,
-            petName: booking.petName,
-            phone: booking.phone,
+            ownerName: booking.ownerName || '',
+            petName: booking.petName || '',
+            phone: booking.phone || '',
             startDate: booking.startDate,
             endDate: booking.endDate,
             checkInTime: booking.checkInTime || '14:00',
@@ -341,7 +343,7 @@ export default function App() {
         return; 
     }
     
-    setIsSubmitting(true); // 開始提交，鎖定按鈕
+    setIsSubmitting(true);
 
     try {
         // Conflict Check (Strictly exclude current editing ID string vs string)
@@ -357,7 +359,7 @@ export default function App() {
 
         if (conflict) { 
             setFormError(`時間衝突！此時段 (${conflict.startDate}~${conflict.endDate}) 已被 ${conflict.petName} 預約`);
-            setIsSubmitting(false); // 解鎖按鈕
+            setIsSubmitting(false);
             return; 
         }
         
@@ -386,9 +388,9 @@ export default function App() {
         showToast(editingBookingId ? '修改成功' : '預約成功');
     } catch (err) {
         console.error("Submit Error:", err);
-        setFormError('儲存失敗，請檢查網路或是重整頁面');
+        setFormError('儲存失敗：' + err.message);
     } finally {
-        setIsSubmitting(false); // 無論成功失敗都解鎖
+        setIsSubmitting(false);
     }
   };
 
@@ -471,7 +473,6 @@ export default function App() {
 
   // --- Room Change Logic (Updated) ---
   const handleRoomChange = (newId) => {
-      // Find which type this room belongs to
       let newType = 'small';
       Object.entries(ROOM_CONFIG).forEach(([key, cfg]) => {
           if (cfg.rooms.includes(newId)) newType = key;
