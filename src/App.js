@@ -194,7 +194,7 @@ export default function App() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [editingBookingId, setEditingBookingId] = useState(null);
   const [editingCustomer, setEditingCustomer] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Global submission state
 
   const [bookingForm, setBookingForm] = useState({
     ownerName: '', petName: '', phone: '', startDate: formatDate(new Date()), endDate: '', 
@@ -283,15 +283,13 @@ export default function App() {
 
   // --- Form Updates ---
   const updateBooking = (field, val) => {
+      if (!selectedRoom) return;
       const next = { ...bookingForm, [field]: val };
-      
-      // Auto recalculate if dates or cat count change, but only if selectedRoom is present
-      if (selectedRoom && ['startDate', 'endDate', 'catCount'].includes(field)) {
+      if (['startDate', 'endDate', 'catCount'].includes(field)) {
           const newTotal = calculateTotal(selectedRoom.type, next.startDate, next.endDate, next.catCount);
           next.totalAmount = newTotal;
           next.balance = newTotal - (parseInt(next.deposit) || 0);
       }
-      
       if (field === 'deposit') next.balance = (parseInt(next.totalAmount) || 0) - (parseInt(val) || 0);
       if (field === 'totalAmount') next.balance = (parseInt(val) || 0) - (parseInt(next.deposit) || 0);
       setBookingForm(next);
@@ -346,11 +344,8 @@ export default function App() {
     setIsSubmitting(true);
 
     try {
-        // Conflict Check (Strictly exclude current editing ID string vs string)
         const conflict = bookings.find(b => {
-            // 如果是編輯模式，先排除自己 (轉字串比較最保險)
             if (editingBookingId && String(b.id) === String(editingBookingId)) return false;
-            
             return (
                 b.roomId === selectedRoom.id && 
                 isDateOverlap(b.startDate, b.endDate, bookingForm.startDate, bookingForm.endDate)
@@ -403,33 +398,65 @@ export default function App() {
       showToast('客戶建立成功');
   };
 
+  // --- Customer Logic (Fixed) ---
   const handleOpenCustomerModal = (c = null, viewOnly = false) => {
     setEditingCustomer(c);
     setIsViewMode(viewOnly);
     setIsPetFormVisible(false);
+    setFormError(''); // Reset error
+    setIsSubmitting(false);
     
+    // Safer pet mapping
     const loadedPets = (c?.pets || []).map(p => {
         const details = getPetDetails(p);
         return { ...DEFAULT_PET, ...details }; 
     });
 
     setCustomerForm(c ? { 
-        name: c.name, 
+        name: c.name || '', 
         phone: c.phone || '', 
         emergencyName: c.emergencyName || '', 
         emergencyPhone: c.emergencyPhone || '', 
         pets: loadedPets, 
         notes: c.notes || '' 
     } : { name: '', phone: '', emergencyName: '', emergencyPhone: '', pets: [], notes: '' });
+    
     setIsCustomerModalOpen(true);
   };
 
   const handleCustomerSubmit = async () => {
-      const customerData = { ...customerForm, updatedAt: new Date().toISOString() };
-      if(editingCustomer) await updateDoc(doc(getPath('customers'), editingCustomer.id), customerData);
-      else await addDoc(getPath('customers'), { ...customerData, createdBy: user?.email || 'Anonymous', createdAt: new Date().toISOString() });
-      setIsCustomerModalOpen(false);
-      showToast(editingCustomer ? '客戶資料已更新' : '客戶資料已建立');
+      setFormError('');
+      if (!customerForm.name) {
+          setFormError('請輸入客戶姓名');
+          return;
+      }
+
+      setIsSubmitting(true);
+
+      try {
+          const customerData = { 
+              ...customerForm, 
+              updatedAt: new Date().toISOString() 
+          };
+
+          if(editingCustomer) {
+              await updateDoc(doc(getPath('customers'), editingCustomer.id), customerData);
+          } else {
+              await addDoc(getPath('customers'), { 
+                  ...customerData, 
+                  createdBy: user?.email || 'Anonymous', 
+                  createdAt: new Date().toISOString() 
+              });
+          }
+          
+          setIsCustomerModalOpen(false);
+          showToast(editingCustomer ? '客戶資料已更新' : '客戶資料已建立');
+      } catch (err) {
+          console.error("Customer Submit Error:", err);
+          setFormError('儲存失敗：' + err.message);
+      } finally {
+          setIsSubmitting(false);
+      }
   };
 
   const handleEditPet = (index) => {
@@ -473,6 +500,7 @@ export default function App() {
 
   // --- Room Change Logic (Updated) ---
   const handleRoomChange = (newId) => {
+      // Find which type this room belongs to
       let newType = 'small';
       Object.entries(ROOM_CONFIG).forEach(([key, cfg]) => {
           if (cfg.rooms.includes(newId)) newType = key;
@@ -986,6 +1014,159 @@ export default function App() {
              </div>
         )}
       </main>
+
+      {/* 1. Customer Modal (Full Features) */}
+      {isCustomerModalOpen && (
+          <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in zoom-in-95 duration-200">
+              <div className="bg-[#F9F7F2] rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] border border-[#EBE5D9] overflow-hidden">
+                  <div className="bg-white px-8 py-5 border-b border-[#EBE5D9] flex justify-between items-center flex-shrink-0">
+                      <div className="flex items-center gap-3">
+                          <div className={`p-2.5 rounded-xl ${isViewMode ? 'bg-[#F2F0E9]' : 'bg-[#EAE4D6]'}`}>{isViewMode ? <User className="w-6 h-6 text-[#9A8478]"/> : <Edit className="w-6 h-6 text-[#8B7355]"/>}</div>
+                          <div><h3 className="text-xl font-bold text-[#5C554F]">{isViewMode ? '客戶資料卡' : (editingCustomer ? '編輯客戶' : '新增客戶')}</h3><p className="text-xs text-[#A09890]">{isViewMode ? '唯讀模式' : '請填寫詳細資訊'}</p></div>
+                      </div>
+                      <button onClick={() => setIsCustomerModalOpen(false)} className="p-2 hover:bg-[#F2F0E9] rounded-full transition-colors"><X className="w-6 h-6 text-[#A09890]"/></button>
+                  </div>
+                  
+                  <div className="p-8 overflow-y-auto custom-scrollbar space-y-8">
+                      {/* 錯誤訊息顯示區 (新增) */}
+                      {formError && (
+                          <div className="bg-[#FFF0F0] border border-[#FADBD8] text-[#C97C7C] p-3 rounded-xl text-sm font-bold flex items-center gap-2">
+                              <AlertCircle className="w-4 h-4"/> {formError}
+                          </div>
+                      )}
+
+                      {/* Owner Section */}
+                      <section>
+                          <h4 className="text-sm font-bold text-[#A09890] uppercase tracking-wider mb-4 flex items-center gap-2"><Info className="w-4 h-4"/> 飼主資訊</h4>
+                          <div className="bg-white p-6 rounded-2xl border border-[#EBE5D9] shadow-sm grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">姓名 *</label><input disabled={isViewMode} value={customerForm.name} onChange={e => setCustomerForm({...customerForm, name: e.target.value})} className={`w-full p-3 rounded-xl ${THEME.input}`} placeholder="輸入姓名"/></div>
+                              <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">電話</label><input disabled={isViewMode} value={customerForm.phone} onChange={e => setCustomerForm({...customerForm, phone: e.target.value})} className={`w-full p-3 rounded-xl ${THEME.input}`} placeholder="09xx-xxx-xxx"/></div>
+                              <div className="space-y-1"><label className="text-xs font-bold text-[#C97C7C] flex items-center gap-1"><AlertCircle className="w-3 h-3"/> 緊急聯絡人</label><input disabled={isViewMode} value={customerForm.emergencyName} onChange={e => setCustomerForm({...customerForm, emergencyName: e.target.value})} className={`w-full p-3 rounded-xl ${THEME.input}`}/></div>
+                              <div className="space-y-1"><label className="text-xs font-bold text-[#C97C7C] flex items-center gap-1"><Phone className="w-3 h-3"/> 緊急電話</label><input disabled={isViewMode} value={customerForm.emergencyPhone} onChange={e => setCustomerForm({...customerForm, emergencyPhone: e.target.value})} className={`w-full p-3 rounded-xl ${THEME.input}`}/></div>
+                          </div>
+                      </section>
+
+                      {/* Pets Section */}
+                      <section>
+                          <div className="flex justify-between items-center mb-4">
+                              <h4 className="text-sm font-bold text-[#A09890] uppercase tracking-wider flex items-center gap-2"><Cat className="w-4 h-4"/> 寵物名單</h4>
+                              {!isViewMode && !isPetFormVisible && <button onClick={() => handleEditPet(-1)} className="text-xs bg-[#9A8478] text-white px-3 py-1.5 rounded-lg font-bold hover:bg-[#826A5D] transition-colors flex items-center gap-1"><Plus className="w-3 h-3"/> 新增寵物</button>}
+                          </div>
+
+                          {!isPetFormVisible && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                  {customerForm.pets.map((p, i) => (
+                                      <div key={i} className="bg-white border border-[#EBE5D9] rounded-2xl p-4 flex gap-4 items-start hover:border-[#D6CDB8] transition-colors relative group">
+                                          <div className="w-16 h-16 bg-[#F9F7F2] rounded-xl flex-shrink-0 overflow-hidden border border-[#EBE5D9]">{p.photo ? <img src={p.photo} className="w-full h-full object-cover"/> : <div className="w-full h-full flex items-center justify-center text-[#D6CDB8]"><Cat className="w-8 h-8"/></div>}</div>
+                                          <div className="flex-1">
+                                              <div className="font-bold text-[#5C554F] text-lg">{p.name}</div>
+                                              <div className="flex gap-2 mt-1"><span className={`text-[10px] px-2 py-0.5 rounded ${p.gender==='boy'?'bg-blue-50 text-blue-600':'bg-pink-50 text-pink-600'}`}>{p.gender==='boy'?'男生':'女生'}</span><span className="text-[10px] bg-[#F2F0E9] text-[#8C8279] px-2 py-0.5 rounded">{p.isNeutered==='yes'?'已結紮':'未結紮'}</span></div>
+                                              <div className="text-xs text-[#A09890] mt-1 truncate">{p.personality || '無個性描述'}</div>
+                                          </div>
+                                          <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                              {isViewMode ? <button onClick={()=>{setTempPet(p); setIsPetFormVisible(true)}} className="p-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg"><Eye className="w-4 h-4"/></button> : <><button onClick={()=>{setTempPet(p); setEditingPetIndex(i); setIsPetFormVisible(true)}} className="p-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg"><Edit className="w-4 h-4"/></button><button onClick={()=>handleDeletePet(i)} className="p-1.5 bg-[#FFF0F0] text-[#C97C7C] rounded-lg"><Trash2 className="w-4 h-4"/></button></>}
+                                          </div>
+                                      </div>
+                                  ))}
+                                  {customerForm.pets.length===0 && <div className="col-span-full py-8 text-center text-[#D6CDB8] border-2 border-dashed border-[#EBE5D9] rounded-2xl">尚未新增任何寵物</div>}
+                              </div>
+                          )}
+
+                          {isPetFormVisible && (
+                              <div className="bg-white p-6 rounded-2xl border border-[#EBE5D9] shadow-sm animate-in zoom-in-95 duration-200">
+                                  <div className="flex justify-between items-center mb-6 border-b border-[#F2F0E9] pb-4">
+                                      <h5 className="font-bold text-[#9A8478] flex items-center gap-2"><Cat className="w-5 h-5"/> {isViewMode ? '寵物詳細資料' : (editingPetIndex>=0?'編輯寵物':'新增寵物')}</h5>
+                                      <button onClick={()=>setIsPetFormVisible(false)} className="text-sm text-[#A09890] hover:text-[#5C554F] bg-[#F9F7F2] px-3 py-1 rounded-lg">關閉</button>
+                                  </div>
+                                  <div className="flex flex-col lg:flex-row gap-8">
+                                      {/* Photo */}
+                                      <div className="flex flex-col items-center gap-4 lg:w-48 flex-shrink-0">
+                                          <div className="w-32 h-32 bg-[#F9F7F2] rounded-full border-4 border-[#F2F0E9] flex items-center justify-center overflow-hidden relative shadow-inner group">
+                                              {tempPet.photo ? <img src={tempPet.photo} className="w-full h-full object-cover"/> : <ImageIcon className="w-10 h-10 text-[#D6CDB8]"/>}
+                                              {!isViewMode && <label className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white"><Upload className="w-6 h-6"/><input type="file" className="hidden" accept="image/*" onChange={e => handlePetImageUpload(e, 'photo')}/></label>}
+                                          </div>
+                                      </div>
+                                      {/* Fields */}
+                                      <div className="flex-1 space-y-6">
+                                          <div className="grid grid-cols-2 gap-4">
+                                              <div className="space-y-1"><label className="text-xs font-bold text-[#9E968E]">名字 *</label><input disabled={isViewMode} value={tempPet.name} onChange={e=>setTempPet({...tempPet, name:e.target.value})} className={`w-full p-2 rounded-lg border ${THEME.input}`}/></div>
+                                              <div className="space-y-1"><label className="text-xs font-bold text-[#9E968E]">個性</label><input disabled={isViewMode} value={tempPet.personality} onChange={e=>setTempPet({...tempPet, personality:e.target.value})} className={`w-full p-2 rounded-lg border ${THEME.input}`}/></div>
+                                          </div>
+                                          {/* Toggles */}
+                                          <div className="grid grid-cols-2 gap-4 bg-[#F9F7F2] p-4 rounded-xl">
+                                              <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">性別</label><div className="flex gap-2">{['boy:男生','girl:女生'].map(o=>{const[v,l]=o.split(':');return<button key={v} disabled={isViewMode} onClick={()=>setTempPet({...tempPet, gender:v})} className={`flex-1 py-1.5 text-sm rounded-lg border ${tempPet.gender===v?(v==='boy'?'bg-blue-100 border-blue-300 text-blue-600':'bg-pink-100 border-pink-300 text-pink-600'):'bg-white text-gray-400'}`}>{l}</button>})}</div></div>
+                                              <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">結紮</label><div className="flex gap-2">{['yes:已結紮','no:未結紮'].map(o=>{const[v,l]=o.split(':');return<button key={v} disabled={isViewMode} onClick={()=>setTempPet({...tempPet, isNeutered:v})} className={`flex-1 py-1.5 text-sm rounded-lg border ${tempPet.isNeutered===v?'bg-[#EAE4D6] border-[#D6CDB8] text-[#8D7B68]':'bg-white text-gray-400'}`}>{l}</button>})}</div></div>
+                                          </div>
+                                          
+                                          {/* Health & Habits */}
+                                          <div className="space-y-4">
+                                              <h6 className="text-xs font-bold text-[#A09890] uppercase tracking-wider flex items-center gap-1"><Stethoscope className="w-3 h-3"/> 健康與習慣</h6>
+                                              
+                                              {/* Diet: Select + Custom */}
+                                              <div className="grid grid-cols-2 gap-4">
+                                                  <div className="space-y-1">
+                                                      <label className="text-xs font-bold text-[#9E968E]">飲食習慣</label>
+                                                      <div className="flex flex-col gap-2">
+                                                          <select disabled={isViewMode} value={['canned','dry','mix','raw'].includes(tempPet.diet)?tempPet.diet:'other'} onChange={e=>{
+                                                              const val = e.target.value;
+                                                              if(val!=='other') setTempPet({...tempPet, diet: val});
+                                                              else setTempPet({...tempPet, diet: ''}); // Reset for custom input
+                                                          }} className={`w-full p-2 rounded-lg ${THEME.input}`}>
+                                                              <option value="canned">濕食</option><option value="dry">乾飼料</option><option value="mix">半濕半乾</option><option value="raw">生食</option><option value="other">其他 (手動輸入)</option>
+                                                          </select>
+                                                          {/* Custom Diet Input */}
+                                                          {!['canned','dry','mix','raw'].includes(tempPet.diet) && <input disabled={isViewMode} value={tempPet.diet} onChange={e=>setTempPet({...tempPet, diet:e.target.value})} placeholder="請輸入特殊飲食..." className={`w-full p-2 rounded-lg border-2 border-[#D6CDB8] bg-white text-[#5C554F] text-sm`}/>}
+                                                      </div>
+                                                  </div>
+                                                  
+                                                  <div className="space-y-1"><label className="text-xs font-bold text-[#9E968E]">貓砂</label><select disabled={isViewMode} value={tempPet.litterType} onChange={e=>setTempPet({...tempPet, litterType:e.target.value})} className={`w-full p-2 rounded-lg ${THEME.input}`}><option value="mineral">礦砂</option><option value="pine">松木砂</option><option value="tofu">豆腐砂</option><option value="other">其他</option></select></div>
+                                              </div>
+
+                                              <div className="grid grid-cols-2 gap-4">
+                                                  <div><label className="text-xs font-bold text-[#9E968E]">亂尿</label><select disabled={isViewMode} value={tempPet.litterHabit} onChange={e=>setTempPet({...tempPet, litterHabit:e.target.value})} className={`w-full p-2 rounded-lg ${THEME.input}`}><option value="normal">無 (良好)</option><option value="issues">偶爾</option><option value="severe">經常</option></select></div>
+                                                  <div><label className="text-xs font-bold text-[#9E968E]">驅蟲</label><input disabled={isViewMode} value={tempPet.deworming} onChange={e=>setTempPet({...tempPet, deworming:e.target.value})} className={`w-full p-2 rounded-lg ${THEME.input}`} placeholder="日期/藥品"/></div>
+                                              </div>
+                                              
+                                              <div className="flex gap-6 py-2">
+                                                  <label className="flex items-center gap-2 cursor-pointer"><input disabled={isViewMode} type="checkbox" checked={tempPet.isRawFood} onChange={e=>setTempPet({...tempPet, isRawFood:e.target.checked})} className="accent-[#9A8478] w-4 h-4"/><span className="text-sm">吃生食</span></label>
+                                                  <label className="flex items-center gap-2 cursor-pointer"><input disabled={isViewMode} type="checkbox" checked={tempPet.hasBoardingExp==='yes'} onChange={e=>setTempPet({...tempPet, hasBoardingExp:e.target.checked?'yes':'no'})} className="accent-[#9A8478] w-4 h-4"/><span className="text-sm">有外宿經驗</span></label>
+                                              </div>
+                                          </div>
+                                          
+                                          {/* Pet Note (New) */}
+                                          <div className="space-y-1">
+                                              <label className="text-xs font-bold text-[#9E968E]">寵物備註</label>
+                                              <textarea disabled={isViewMode} value={tempPet.notes} onChange={e=>setTempPet({...tempPet, notes:e.target.value})} className={`w-full p-2 rounded-lg border ${THEME.input}`} placeholder="例如：怕雷聲、討厭剪指甲..." rows="2"/>
+                                          </div>
+
+                                          {/* Vaccine Book */}
+                                          <div className="pt-4 border-t border-[#F2F0E9]">
+                                              <label className="text-xs font-bold text-[#9E968E] mb-2 block">疫苗本照片</label>
+                                              {tempPet.vaccinationBook ? (
+                                                  <div className="relative group w-40 h-28 rounded-lg overflow-hidden border bg-[#F9F7F2]"><img src={tempPet.vaccinationBook} className="w-full h-full object-cover"/>{!isViewMode && <button onClick={()=>setTempPet({...tempPet, vaccinationBook:null})} className="absolute top-1 right-1 bg-white rounded-full p-1 shadow text-red-400"><X className="w-3 h-3"/></button>}</div>
+                                              ) : (
+                                                  !isViewMode && <label className="cursor-pointer w-40 h-28 border-2 border-dashed border-[#EBE5D9] rounded-lg flex flex-col items-center justify-center text-[#D6CDB8] hover:bg-[#F9F7F2] transition-colors"><FileImage className="w-6 h-6 mb-1"/><span className="text-xs">上傳照片</span><input type="file" className="hidden" accept="image/*" onChange={e=>handlePetImageUpload(e, 'vaccinationBook')}/></label>
+                                              )}
+                                          </div>
+                                          {!isViewMode && <button onClick={handleSavePet} className={`w-full py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md`}>{editingPetIndex>=0?'更新寵物資料':'加入此寵物'}</button>}
+                                      </div>
+                                  </div>
+                              </div>
+                          )}
+                      </section>
+                  </div>
+                  {!isViewMode && <div className="p-6 border-t border-[#EBE5D9] bg-white flex gap-4 sticky bottom-0 z-10"><button onClick={()=>setIsCustomerModalOpen(false)} className="flex-1 py-3 border rounded-xl font-bold text-[#A09890]">取消</button>
+                  <button 
+                    onClick={handleCustomerSubmit} 
+                    disabled={isSubmitting}
+                    className={`flex-1 py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md flex justify-center items-center gap-2 ${isSubmitting ? 'opacity-50' : ''}`}
+                  >
+                      {isSubmitting ? '儲存中...' : '儲存客戶資料'}
+                  </button></div>}
+                  {isViewMode && <div className="p-6 border-t border-[#EBE5D9] bg-white sticky bottom-0 z-10"><button onClick={()=>setIsViewMode(false)} className={`w-full py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md flex justify-center items-center gap-2`}><Edit className="w-4 h-4"/> 編輯資料</button></div>}
+              </div>
+          </div>
+      )}
 
       {/* 2. Booking Modal */}
       {isBookingModalOpen && selectedRoom && (
