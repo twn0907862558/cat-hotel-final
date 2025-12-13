@@ -1328,25 +1328,26 @@ export default function App() {
           </div>
       )}
 
-{/* Reminder Modal */}
-      {isReminderModalOpen && (
+{/* Reminder Modal - 防當機修復版 */}
+      {isReminderModalOpen && reminders && (
            <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
                     <div className="px-6 py-4 bg-[#F9F7F2] border-b border-[#EBE5D9] flex justify-between items-center">
                         <h3 className="font-bold flex gap-2 text-[#5C554F] items-center">
                             <Bell className="w-5 h-5 text-[#9A8478]"/> 明日提醒
                         </h3>
-                        <button onClick={()=>setIsReminderModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                        <button onClick={()=>setIsReminderModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full">
                             <X className="w-5 h-5 text-[#A09890]"/>
                         </button>
                     </div>
                     <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
-                        {(!reminders.ins.length && !reminders.outs.length) && (
+                        {/* 1. 安全檢查：如果沒資料顯示提示 */}
+                        {(!reminders.ins?.length && !reminders.outs?.length) && (
                             <div className="text-center text-[#D6CDB8] py-8">明日無特別事項</div>
                         )}
                         
-                        {/* 明日入住 */}
-                        {reminders.ins.length > 0 && (
+                        {/* 2. 入住列表 */}
+                        {reminders.ins?.length > 0 && (
                             <div>
                                 <h4 className="text-xs font-bold text-[#94A89A] mb-2 uppercase tracking-wider">明日入住</h4>
                                 <div className="space-y-2">
@@ -1356,8 +1357,8 @@ export default function App() {
                                                 <div className="font-bold text-[#5C554F]">{b.petName}</div>
                                                 <div className="text-xs text-[#A09890]">{b.ownerName}</div>
                                             </div>
-                                            <button onClick={()=>copyText(`提醒您明天是${b.petName}入住的日子`)} className="p-2 bg-white rounded-lg shadow-sm text-[#94A89A] border border-[#E0EFE6] hover:bg-[#E0EFE6] transition-colors">
-                                                <Copy className="w-4 h-4"/>
+                                            <button onClick={()=>copyText(`提醒您明天是${b.petName}入住的日子`)} className="px-3 py-1 bg-white rounded-lg shadow-sm text-[#94A89A] text-xs font-bold border border-[#E0EFE6]">
+                                                複製
                                             </button>
                                         </div>
                                     ))}
@@ -1365,8 +1366,8 @@ export default function App() {
                             </div>
                         )}
 
-                        {/* 明日退房 */}
-                        {reminders.outs.length > 0 && (
+                        {/* 3. 退房列表 */}
+                        {reminders.outs?.length > 0 && (
                             <div>
                                 <h4 className="text-xs font-bold text-[#C97C7C] mb-2 uppercase tracking-wider">明日退房</h4>
                                 <div className="space-y-2">
@@ -1376,8 +1377,8 @@ export default function App() {
                                                 <div className="font-bold text-[#5C554F]">{b.petName}</div>
                                                 <div className="text-xs text-[#A09890]">{b.ownerName}</div>
                                             </div>
-                                            <button onClick={()=>copyText(`提醒您明天是${b.petName}退房的日子`)} className="p-2 bg-white rounded-lg shadow-sm text-[#C97C7C] border border-[#FFE0E0] hover:bg-[#FFE0E0] transition-colors">
-                                                <Copy className="w-4 h-4"/>
+                                            <button onClick={()=>copyText(`提醒您明天是${b.petName}退房的日子`)} className="px-3 py-1 bg-white rounded-lg shadow-sm text-[#C97C7C] text-xs font-bold border border-[#FFE0E0]">
+                                                複製
                                             </button>
                                         </div>
                                     ))}
