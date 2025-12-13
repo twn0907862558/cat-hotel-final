@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Calendar as CalendarIcon, User, Cat, Trash2, Plus, X, 
-  ChevronLeft, ChevronRight, Search, LogIn, LogOut, Home,
-  Eye, Edit, Download, Upload, Image as ImageIcon, Phone, AlertCircle, CheckCircle, Info, Bell, MapPin, DollarSign, Wallet, Check, Stethoscope, Printer, FileText
+  Calendar as CalendarIcon, Clock, User, Cat, Trash2, Plus, X, 
+  ChevronLeft, ChevronRight, LayoutGrid, Users, Search, Save, LogIn, LogOut, UserPlus, Home, Share2,
+  Eye, Edit, Download, Upload, Image as ImageIcon, Phone, AlertCircle, CheckCircle, Info, FileText, MapPin, Heart, Shield, FileImage, AlertTriangle, Bell, Copy, MessageSquare, DollarSign, Wallet, Calculator, Check, Stethoscope, Utensils, Printer, FileSpreadsheet, Sparkles, StickyNote
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -431,7 +431,7 @@ export default function App() {
       showToast('客戶建立成功');
   };
 
-  // --- Customer Logic ---
+  // --- Customer Logic (Fixed for Crash) ---
   const handleOpenCustomerModal = (c = null, viewOnly = false) => {
     setEditingCustomer(c);
     setIsViewMode(viewOnly);
@@ -439,6 +439,7 @@ export default function App() {
     setFormError('');
     setIsSubmitting(false);
     
+    // 安全載入寵物資料
     const loadedPets = (c?.pets || []).map(p => {
         const details = getPetDetails(p);
         return { ...DEFAULT_PET, ...details }; 
@@ -493,7 +494,9 @@ export default function App() {
 
   const handleEditPet = (index) => {
     setEditingPetIndex(index);
-    setTempPet(index >= 0 ? { ...customerForm.pets[index] } : { ...DEFAULT_PET });
+    // Deep copy current pet or use default
+    const petToEdit = index >= 0 ? customerForm.pets[index] : DEFAULT_PET;
+    setTempPet({ ...petToEdit });
     setIsPetFormVisible(true);
   };
 
@@ -574,7 +577,8 @@ export default function App() {
     return customers.filter(customer => 
       customer.name.toLowerCase().includes(lowerQuery) || 
       (customer.phone && customer.phone.includes(lowerQuery)) || 
-      (customer.pets && customer.pets.some(pet => getPetName(pet).toLowerCase().includes(lowerQuery)))
+      (customer.pets && customer.pets.some(pet => getPetName(pet).toLowerCase().includes(lowerQuery))) ||
+      (customer.notes && customer.notes.toLowerCase().includes(lowerQuery)) // 新增：可搜尋備註
     );
   }, [customerSearchQuery, customers]);
 
@@ -743,7 +747,7 @@ export default function App() {
             <div className="hidden md:flex bg-[#F2F0E9] p-1 rounded-full mr-2">
                 <NavButton id="rooms" icon={Home} label="房況" />
                 <NavButton id="calendar" icon={CalendarIcon} label="月曆" />
-                <NavButton id="customers" icon={User} label="客戶" />
+                <NavButton id="customers" icon={Users} label="客戶" />
                 <NavButton id="finance" icon={DollarSign} label="帳務" />
             </div>
             
@@ -762,7 +766,7 @@ export default function App() {
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-[#EBE5D9] flex justify-around p-3 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] print:hidden">
            <button onClick={() => setActiveTab('rooms')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='rooms' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Home className="w-5 h-5"/><span className="text-[10px]">房況</span></button>
            <button onClick={() => setActiveTab('calendar')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='calendar' ? 'text-[#9A8478]' : 'text-gray-400'}`}><CalendarIcon className="w-5 h-5"/><span className="text-[10px]">月曆</span></button>
-           <button onClick={() => setActiveTab('customers')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='customers' ? 'text-[#9A8478]' : 'text-gray-400'}`}><User className="w-5 h-5"/><span className="text-[10px]">客戶</span></button>
+           <button onClick={() => setActiveTab('customers')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='customers' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Users className="w-5 h-5"/><span className="text-[10px]">客戶</span></button>
            <button onClick={() => setActiveTab('finance')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='finance' ? 'text-[#9A8478]' : 'text-gray-400'}`}><DollarSign className="w-5 h-5"/><span className="text-[10px]">帳務</span></button>
       </div>
 
@@ -775,7 +779,7 @@ export default function App() {
                             <Plus className="w-4 h-4"/> 新增預約
                         </button>
                         <button onClick={handleExportFutureBookings} className="bg-white border border-[#EBE5D9] text-[#8D7B68] px-4 py-2.5 rounded-xl shadow-sm flex items-center gap-2 text-sm font-bold w-full sm:w-auto justify-center hover:bg-[#F9F7F2]">
-                            <FileText className="w-4 h-4"/> 匯出未入住
+                            <FileSpreadsheet className="w-4 h-4"/> 匯出未入住
                         </button>
                     </div>
                     
@@ -849,7 +853,7 @@ export default function App() {
                     </div>
                     <h2 className="text-lg font-bold text-[#5C554F]">{currentMonth.getFullYear()}年 {currentMonth.getMonth()+1}月</h2>
                     <div className="flex gap-2 items-center">
-                        <button onClick={() => setIsSpecialDateModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-[#FDF2E9] text-[#D35400] rounded-lg text-sm font-bold shadow-sm hover:bg-[#FAE5D3]"><Info className="w-4 h-4"/> 節日</button>
+                        <button onClick={() => setIsSpecialDateModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-[#FDF2E9] text-[#D35400] rounded-lg text-sm font-bold shadow-sm hover:bg-[#FAE5D3]"><Sparkles className="w-4 h-4"/> 節日</button>
                         <button onClick={handleExportMonthReport} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-[#EBE5D9] text-[#8D7B68] rounded-lg text-sm font-bold shadow-sm hover:bg-[#F9F7F2]"><Download className="w-4 h-4"/> 月報</button>
                         <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg text-sm font-bold"><Printer className="w-4 h-4"/> 列印</button>
                     </div>
@@ -1029,6 +1033,8 @@ export default function App() {
                                              </span>
                                          ))}
                                      </div>
+                                     {/* 列表也顯示備註 */}
+                                     {c.notes && <div className="mt-2 text-xs text-[#A09890] bg-[#F9F7F2] p-2 rounded-lg truncate"><Info className="w-3 h-3 inline mr-1"/>{c.notes}</div>}
                                  </div>
                              ))}
                          </div>
@@ -1038,12 +1044,12 @@ export default function App() {
         )}
       </main>
 
-      {/* 4. Special Date Modal */}
+      {/* 4. Special Date Modal (New) */}
       {isSpecialDateModalOpen && (
           <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden">
                   <div className="bg-[#FDF2E9] px-6 py-4 border-b border-[#F5CBA7] flex justify-between items-center">
-                      <h3 className="font-bold text-[#D35400] flex items-center gap-2"><Info className="w-5 h-5"/> 特殊節日設定</h3>
+                      <h3 className="font-bold text-[#D35400] flex items-center gap-2"><Sparkles className="w-5 h-5"/> 特殊節日設定</h3>
                       <button onClick={()=>setIsSpecialDateModalOpen(false)}><X className="text-[#A09890]"/></button>
                   </div>
                   <div className="p-6 space-y-4">
@@ -1071,12 +1077,16 @@ export default function App() {
           </div>
       )}
 
-      {/* 2. Booking Modal */}
+      {/* 2. Booking Modal (With Room Selection) */}
       {isBookingModalOpen && selectedRoom && (
           <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in zoom-in-95 duration-200">
               <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
                   <div className="bg-[#FDFBF7] px-6 py-4 border-b border-[#EBE5D9] flex justify-between items-center flex-shrink-0">
-                      <div><h3 className="text-lg font-bold text-[#5C554F]">{editingBookingId ? '編輯預約' : '新增預約'}</h3><span className={`text-xs px-2 py-0.5 rounded ${ROOM_CONFIG[selectedRoom.type].tag}`}>{ROOM_CONFIG[selectedRoom.type].label}</span></div>
+                      <div>
+                          {/* 標題根據狀態改變 */}
+                          <h3 className="text-lg font-bold text-[#5C554F]">{editingBookingId ? '預約詳細資料' : '新增預約'}</h3>
+                          <span className={`text-xs px-2 py-0.5 rounded ${ROOM_CONFIG[selectedRoom.type].tag}`}>{ROOM_CONFIG[selectedRoom.type].label}</span>
+                      </div>
                       <button onClick={()=>setIsBookingModalOpen(false)}><X className="text-[#A09890]"/></button>
                   </div>
                   <div className="p-6 overflow-y-auto custom-scrollbar space-y-5 flex-1">
@@ -1142,7 +1152,7 @@ export default function App() {
                             onClick={()=>deleteBooking(editingBookingId)} 
                             className="p-3 bg-[#FFF0F0] text-[#C97C7C] rounded-xl flex items-center gap-2 text-sm font-bold border border-[#FADBD8] hover:bg-[#FCE4E4]"
                           >
-                              <Trash2 className="w-4 h-4"/> 刪除
+                              <Trash2 className="w-4 h-4"/> 刪除預約
                           </button>
                       ) : <div></div>}
                       
@@ -1162,7 +1172,7 @@ export default function App() {
           </div>
       )}
 
-      {/* 1. Customer Modal (Full Features) */}
+      {/* 1. Customer Modal (Fixed Crash & Added Notes) */}
       {isCustomerModalOpen && (
           <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in zoom-in-95 duration-200">
               <div className="bg-[#F9F7F2] rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] border border-[#EBE5D9] overflow-hidden">
@@ -1188,6 +1198,19 @@ export default function App() {
                               <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">電話</label><input disabled={isViewMode} value={customerForm.phone} onChange={e => setCustomerForm({...customerForm, phone: e.target.value})} className={`w-full p-3 rounded-xl ${THEME.input}`} placeholder="09xx-xxx-xxx"/></div>
                               <div className="space-y-1"><label className="text-xs font-bold text-[#C97C7C] flex items-center gap-1"><AlertCircle className="w-3 h-3"/> 緊急聯絡人</label><input disabled={isViewMode} value={customerForm.emergencyName} onChange={e => setCustomerForm({...customerForm, emergencyName: e.target.value})} className={`w-full p-3 rounded-xl ${THEME.input}`}/></div>
                               <div className="space-y-1"><label className="text-xs font-bold text-[#C97C7C] flex items-center gap-1"><Phone className="w-3 h-3"/> 緊急電話</label><input disabled={isViewMode} value={customerForm.emergencyPhone} onChange={e => setCustomerForm({...customerForm, emergencyPhone: e.target.value})} className={`w-full p-3 rounded-xl ${THEME.input}`}/></div>
+                          </div>
+                          
+                          {/* 新增：客戶備註欄位 */}
+                          <div className="mt-4 bg-[#FDF2E9] p-4 rounded-2xl border border-[#F5CBA7]">
+                              <label className="text-xs font-bold text-[#D35400] flex items-center gap-2 mb-1"><StickyNote className="w-3 h-3"/> 客戶備註 (奧客/VIP/特殊需求)</label>
+                              <textarea 
+                                disabled={isViewMode} 
+                                value={customerForm.notes} 
+                                onChange={e => setCustomerForm({...customerForm, notes: e.target.value})} 
+                                className="w-full p-2 bg-white rounded-lg border border-[#F5CBA7] text-sm" 
+                                rows="2"
+                                placeholder="在此輸入不需點進寵物就能看到的備註..."
+                              />
                           </div>
                       </section>
 
@@ -1216,30 +1239,37 @@ export default function App() {
                               </div>
                           )}
 
-                          {isPetFormVisible && (
+                          {isPetFormVisible && tempPet && (
                               <div className="bg-white p-6 rounded-2xl border border-[#EBE5D9] shadow-sm animate-in zoom-in-95 duration-200">
                                   <div className="flex justify-between items-center mb-6 border-b border-[#F2F0E9] pb-4">
                                       <h5 className="font-bold text-[#9A8478] flex items-center gap-2"><Cat className="w-5 h-5"/> {isViewMode ? '寵物詳細資料' : (editingPetIndex>=0?'編輯寵物':'新增寵物')}</h5>
                                       <button type="button" onClick={()=>setIsPetFormVisible(false)} className="text-sm text-[#A09890] hover:text-[#5C554F] bg-[#F9F7F2] px-3 py-1 rounded-lg">關閉</button>
                                   </div>
                                   <div className="flex flex-col lg:flex-row gap-8">
+                                      {/* Photo */}
                                       <div className="flex flex-col items-center gap-4 lg:w-48 flex-shrink-0">
                                           <div className="w-32 h-32 bg-[#F9F7F2] rounded-full border-4 border-[#F2F0E9] flex items-center justify-center overflow-hidden relative shadow-inner group">
                                               {tempPet.photo ? <img src={tempPet.photo} className="w-full h-full object-cover"/> : <ImageIcon className="w-10 h-10 text-[#D6CDB8]"/>}
                                               {!isViewMode && <label className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white"><Upload className="w-6 h-6"/><input type="file" className="hidden" accept="image/*" onChange={e => handlePetImageUpload(e, 'photo')}/></label>}
                                           </div>
                                       </div>
+                                      {/* Fields */}
                                       <div className="flex-1 space-y-6">
                                           <div className="grid grid-cols-2 gap-4">
                                               <div className="space-y-1"><label className="text-xs font-bold text-[#9E968E]">名字 *</label><input disabled={isViewMode} value={tempPet.name} onChange={e=>setTempPet({...tempPet, name:e.target.value})} className={`w-full p-2 rounded-lg border ${THEME.input}`}/></div>
                                               <div className="space-y-1"><label className="text-xs font-bold text-[#9E968E]">個性</label><input disabled={isViewMode} value={tempPet.personality} onChange={e=>setTempPet({...tempPet, personality:e.target.value})} className={`w-full p-2 rounded-lg border ${THEME.input}`}/></div>
                                           </div>
+                                          {/* Toggles */}
                                           <div className="grid grid-cols-2 gap-4 bg-[#F9F7F2] p-4 rounded-xl">
                                               <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">性別</label><div className="flex gap-2">{['boy:男生','girl:女生'].map(o=>{const[v,l]=o.split(':');return<button key={v} type="button" disabled={isViewMode} onClick={()=>setTempPet({...tempPet, gender:v})} className={`flex-1 py-1.5 text-sm rounded-lg border ${tempPet.gender===v?(v==='boy'?'bg-blue-100 border-blue-300 text-blue-600':'bg-pink-100 border-pink-300 text-pink-600'):'bg-white text-gray-400'}`}>{l}</button>})}</div></div>
                                               <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">結紮</label><div className="flex gap-2">{['yes:已結紮','no:未結紮'].map(o=>{const[v,l]=o.split(':');return<button key={v} type="button" disabled={isViewMode} onClick={()=>setTempPet({...tempPet, isNeutered:v})} className={`flex-1 py-1.5 text-sm rounded-lg border ${tempPet.isNeutered===v?'bg-[#EAE4D6] border-[#D6CDB8] text-[#8D7B68]':'bg-white text-gray-400'}`}>{l}</button>})}</div></div>
                                           </div>
+                                          
+                                          {/* Health & Habits */}
                                           <div className="space-y-4">
                                               <h6 className="text-xs font-bold text-[#A09890] uppercase tracking-wider flex items-center gap-1"><Stethoscope className="w-3 h-3"/> 健康與習慣</h6>
+                                              
+                                              {/* Diet: Select + Custom */}
                                               <div className="grid grid-cols-2 gap-4">
                                                   <div className="space-y-1">
                                                       <label className="text-xs font-bold text-[#9E968E]">飲食習慣</label>
@@ -1251,24 +1281,32 @@ export default function App() {
                                                           }} className={`w-full p-2 rounded-lg ${THEME.input}`}>
                                                               <option value="canned">濕食</option><option value="dry">乾飼料</option><option value="mix">半濕半乾</option><option value="raw">生食</option><option value="other">其他 (手動輸入)</option>
                                                           </select>
+                                                          {/* Custom Diet Input */}
                                                           {!['canned','dry','mix','raw'].includes(tempPet.diet) && <input disabled={isViewMode} value={tempPet.diet} onChange={e=>setTempPet({...tempPet, diet:e.target.value})} placeholder="請輸入特殊飲食..." className={`w-full p-2 rounded-lg border-2 border-[#D6CDB8] bg-white text-[#5C554F] text-sm`}/>}
                                                       </div>
                                                   </div>
+                                                  
                                                   <div className="space-y-1"><label className="text-xs font-bold text-[#9E968E]">貓砂</label><select disabled={isViewMode} value={tempPet.litterType} onChange={e=>setTempPet({...tempPet, litterType:e.target.value})} className={`w-full p-2 rounded-lg ${THEME.input}`}><option value="mineral">礦砂</option><option value="pine">松木砂</option><option value="tofu">豆腐砂</option><option value="other">其他</option></select></div>
                                               </div>
+
                                               <div className="grid grid-cols-2 gap-4">
                                                   <div><label className="text-xs font-bold text-[#9E968E]">亂尿</label><select disabled={isViewMode} value={tempPet.litterHabit} onChange={e=>setTempPet({...tempPet, litterHabit:e.target.value})} className={`w-full p-2 rounded-lg ${THEME.input}`}><option value="normal">無 (良好)</option><option value="issues">偶爾</option><option value="severe">經常</option></select></div>
                                                   <div><label className="text-xs font-bold text-[#9E968E]">驅蟲</label><input disabled={isViewMode} value={tempPet.deworming} onChange={e=>setTempPet({...tempPet, deworming:e.target.value})} className={`w-full p-2 rounded-lg ${THEME.input}`} placeholder="日期/藥品"/></div>
                                               </div>
+                                              
                                               <div className="flex gap-6 py-2">
                                                   <label className="flex items-center gap-2 cursor-pointer"><input disabled={isViewMode} type="checkbox" checked={tempPet.isRawFood} onChange={e=>setTempPet({...tempPet, isRawFood:e.target.checked})} className="accent-[#9A8478] w-4 h-4"/><span className="text-sm">吃生食</span></label>
                                                   <label className="flex items-center gap-2 cursor-pointer"><input disabled={isViewMode} type="checkbox" checked={tempPet.hasBoardingExp==='yes'} onChange={e=>setTempPet({...tempPet, hasBoardingExp:e.target.checked?'yes':'no'})} className="accent-[#9A8478] w-4 h-4"/><span className="text-sm">有外宿經驗</span></label>
                                               </div>
                                           </div>
+                                          
+                                          {/* Pet Note (New) */}
                                           <div className="space-y-1">
                                               <label className="text-xs font-bold text-[#9E968E]">寵物備註</label>
                                               <textarea disabled={isViewMode} value={tempPet.notes} onChange={e=>setTempPet({...tempPet, notes:e.target.value})} className={`w-full p-2 rounded-lg border ${THEME.input}`} placeholder="例如：怕雷聲、討厭剪指甲..." rows="2"/>
                                           </div>
+
+                                          {/* Vaccine Book */}
                                           <div className="pt-4 border-t border-[#F2F0E9]">
                                               <label className="text-xs font-bold text-[#9E968E] mb-2 block">疫苗本照片</label>
                                               {tempPet.vaccinationBook ? (
@@ -1293,7 +1331,7 @@ export default function App() {
                   >
                       {isSubmitting ? '儲存中...' : '儲存客戶資料'}
                   </button></div>}
-                  {isViewMode && <div className="p-6 border-t border-[#EBE5D9] bg-white sticky bottom-0 z-10"><button type="button" onClick={()=>setIsViewMode(false)} className={`w-full py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md flex justify-center items-center gap-2`}><Edit className="w-4 h-4"/> 編輯資料</button></div>}
+                  {isViewMode && <div className="p-6 border-t border-[#EBE5D9] bg-white sticky bottom-0 z-10"><button onClick={()=>setIsViewMode(false)} className={`w-full py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md flex justify-center items-center gap-2`}><Edit className="w-4 h-4"/> 編輯資料</button></div>}
               </div>
           </div>
       )}
@@ -1328,68 +1366,32 @@ export default function App() {
           </div>
       )}
 
-{/* Reminder Modal - 防當機修復版 */}
-      {isReminderModalOpen && reminders && (
+      {/* Reminder Modal */}
+      {isReminderModalOpen && (
            <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
-                    <div className="px-6 py-4 bg-[#F9F7F2] border-b border-[#EBE5D9] flex justify-between items-center">
-                        <h3 className="font-bold flex gap-2 text-[#5C554F] items-center">
-                            <Bell className="w-5 h-5 text-[#9A8478]"/> 明日提醒
-                        </h3>
-                        <button onClick={()=>setIsReminderModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full">
-                            <X className="w-5 h-5 text-[#A09890]"/>
-                        </button>
-                    </div>
+                    <div className="px-6 py-4 bg-[#F9F7F2] border-b flex justify-between items-center"><h3 className="font-bold flex gap-2 text-[#5C554F]"><Bell className="w-5 h-5 text-[#9A8478]"/> 明日提醒</h3><button onClick={()=>setIsReminderModalOpen(false)}><X/></button></div>
                     <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
-                        {/* 1. 安全檢查：如果沒資料顯示提示 */}
-                        {(!reminders.ins?.length && !reminders.outs?.length) && (
-                            <div className="text-center text-[#D6CDB8] py-8">明日無特別事項</div>
-                        )}
-                        
-                        {/* 2. 入住列表 */}
-                        {reminders.ins?.length > 0 && (
-                            <div>
-                                <h4 className="text-xs font-bold text-[#94A89A] mb-2 uppercase tracking-wider">明日入住</h4>
-                                <div className="space-y-2">
-                                    {reminders.ins.map(b=>(
-                                        <div key={b.id} className="bg-[#F0F9F4] p-3 rounded-xl border border-[#E0EFE6] flex justify-between items-center">
-                                            <div>
-                                                <div className="font-bold text-[#5C554F]">{b.petName}</div>
-                                                <div className="text-xs text-[#A09890]">{b.ownerName}</div>
-                                            </div>
-                                            <button onClick={()=>copyText(`提醒您明天是${b.petName}入住的日子`)} className="px-3 py-1 bg-white rounded-lg shadow-sm text-[#94A89A] text-xs font-bold border border-[#E0EFE6]">
-                                                複製
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 3. 退房列表 */}
-                        {reminders.outs?.length > 0 && (
-                            <div>
-                                <h4 className="text-xs font-bold text-[#C97C7C] mb-2 uppercase tracking-wider">明日退房</h4>
-                                <div className="space-y-2">
-                                    {reminders.outs.map(b=>(
-                                        <div key={b.id} className="bg-[#FFF5F5] p-3 rounded-xl border border-[#FFE0E0] flex justify-between items-center">
-                                            <div>
-                                                <div className="font-bold text-[#5C554F]">{b.petName}</div>
-                                                <div className="text-xs text-[#A09890]">{b.ownerName}</div>
-                                            </div>
-                                            <button onClick={()=>copyText(`提醒您明天是${b.petName}退房的日子`)} className="px-3 py-1 bg-white rounded-lg shadow-sm text-[#C97C7C] text-xs font-bold border border-[#FFE0E0]">
-                                                複製
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
+                        {reminders.ins.length===0 && reminders.outs.length===0 && <div className="text-center text-[#D6CDB8] py-8">明日無特別事項</div>}
+                        {reminders.ins.length>0 && <div><h4 className="text-xs font-bold text-[#94A89A] mb-2 uppercase tracking-wider">明日入住</h4><div className="space-y-2">{reminders.ins.map(b=><div key={b.id} className="bg-[#F0F9F4] p-3 rounded-xl border border-[#E0EFE6] flex justify-between items-center"><div><div className="font-bold text-[#5C554F]">{b.petName}</div><div className="text-xs text-[#A09890]">{b.ownerName}</div></div><button onClick={()=>copyText(`提醒您明天是${b.petName}入住的日子`)} className="p-2 bg-white rounded-lg shadow-sm text-[#94A89A]"><Copy className="w-4 h-4"/></button></div>)}</div></div>}
+                        {reminders.outs.length>0 && <div><h4 className="text-xs font-bold text-[#C97C7C] mb-2 uppercase tracking-wider">明日退房</h4><div className="space-y-2">{reminders.outs.map(b=><div key={b.id} className="bg-[#FFF5F5] p-3 rounded-xl border border-[#FFE0E0] flex justify-between items-center"><div><div className="font-bold text-[#5C554F]">{b.petName}</div><div className="text-xs text-[#A09890]">{b.ownerName}</div></div><button onClick={()=>copyText(`提醒您明天是${b.petName}退房的日子`)} className="p-2 bg-white rounded-lg shadow-sm text-[#C97C7C]"><Copy className="w-4 h-4"/></button></div>)}</div></div>}
                     </div>
                 </div>
            </div>
       )}
 
+      {/* Auth Modal */}
+      {isAuthModalOpen && (
+        <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+             <div className="bg-white p-8 rounded-3xl max-w-sm w-full space-y-6 shadow-2xl">
+                 <div className="text-center"><div className="bg-[#F9F7F2] w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"><User className="w-6 h-6 text-[#9A8478]"/></div><h2 className="text-xl font-bold text-[#5C554F]">管理員登入</h2></div>
+                 <div className="space-y-3"><input type="email" placeholder="Email" className={`w-full p-3 rounded-xl border ${THEME.input}`} value={authForm.email} onChange={e=>setAuthForm({...authForm, email:e.target.value})}/><input type="password" placeholder="Password" className={`w-full p-3 rounded-xl border ${THEME.input}`} value={authForm.password} onChange={e=>setAuthForm({...authForm, password:e.target.value})}/></div>
+                 <button onClick={authMode==='login'?handleLogin:handleRegister} className={`w-full py-3 ${THEME.primary} text-white rounded-xl font-bold shadow-md`}>{authMode==='login'?'登入':'註冊'}</button>
+                 <div className="flex justify-between text-xs mt-2"><button onClick={()=>setIsAuthModalOpen(false)} className="text-[#A09890]">暫不登入</button><button onClick={()=>setAuthMode(m=>m==='login'?'reg':'login')} className="text-[#9A8478] underline">{authMode==='login'?'註冊帳號':'返回登入'}</button></div>
+             </div>
+        </div>
+      )}
+      
       {/* Toast Notification */}
       {toast.show && (
           <div className={`fixed bottom-4 right-4 px-6 py-3 rounded-xl shadow-lg transform transition-all duration-300 animate-in slide-in-from-bottom-5 z-50 flex items-center gap-2 ${toast.type === 'danger' ? 'bg-[#FFF0F0] text-[#C97C7C] border border-[#FADBD8]' : 'bg-[#F0F9F4] text-[#6B9E78] border border-[#E0EFE6]'}`}>
