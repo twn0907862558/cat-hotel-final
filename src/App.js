@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Calendar as CalendarIcon, Clock, User, Cat, Trash2, Plus, X, 
-  ChevronLeft, ChevronRight, LayoutGrid, Users, Search, Save, LogIn, LogOut, UserPlus, Home, Share2,
-  Eye, Edit, Download, Upload, Image as ImageIcon, Phone, AlertCircle, CheckCircle, Info, FileText, MapPin, Heart, Shield, FileImage, AlertTriangle, Bell, Copy, MessageSquare, DollarSign, Wallet, Calculator, Check, Stethoscope, Utensils, Printer, FileSpreadsheet, Sparkles
+  Calendar as CalendarIcon, User, Cat, Trash2, Plus, X, 
+  ChevronLeft, ChevronRight, Search, LogIn, LogOut, Home,
+  Eye, Edit, Download, Upload, Image as ImageIcon, Phone, AlertCircle, CheckCircle, Info, Bell, MapPin, DollarSign, Wallet, Check, Stethoscope, Printer, FileText
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -171,7 +171,7 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [specialDates, setSpecialDates] = useState([]); // 特殊節日資料
+  const [specialDates, setSpecialDates] = useState([]);
   
   const [activeTab, setActiveTab] = useState('rooms');
   const [viewDate, setViewDate] = useState(formatDate(new Date()));
@@ -182,7 +182,7 @@ export default function App() {
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
-  const [isSpecialDateModalOpen, setIsSpecialDateModalOpen] = useState(false); // 特殊節日 Modal
+  const [isSpecialDateModalOpen, setIsSpecialDateModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   
   // Custom Alert/Confirm States
@@ -216,8 +216,7 @@ export default function App() {
   const [showPetSuggestions, setShowPetSuggestions] = useState(false);
   const [isViewMode, setIsViewMode] = useState(false);
   const [formError, setFormError] = useState('');
-  const [authError, setAuthError] = useState('');
-
+  
   // --- Auth Init ---
   useEffect(() => {
     const initAuth = async () => {
@@ -432,7 +431,7 @@ export default function App() {
       showToast('客戶建立成功');
   };
 
-  // --- Customer Logic (Fixed) ---
+  // --- Customer Logic ---
   const handleOpenCustomerModal = (c = null, viewOnly = false) => {
     setEditingCustomer(c);
     setIsViewMode(viewOnly);
@@ -709,6 +708,16 @@ export default function App() {
     downloadCSV(dataToExport, `客戶資料_${formatDate(new Date())}.csv`);
   };
 
+  // --- Components ---
+  const NavButton = ({ id, icon: Icon, label }) => (
+    <button onClick={() => setActiveTab(id)} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold transition-all duration-300 ${activeTab === id ? THEME.activeTab : THEME.inactiveTab} print:hidden`}>
+      <Icon className="w-4 h-4" />{label}
+    </button>
+  );
+
+  const isPermanentUser = user && !user.isAnonymous;
+  const currentUserEmail = user && !user.isAnonymous ? user.email : '匿名用戶';
+
   // --- Render ---
   return (
     <div className={`min-h-screen ${THEME.bg} font-sans pb-20 text-[#5C554F]`}>
@@ -734,7 +743,7 @@ export default function App() {
             <div className="hidden md:flex bg-[#F2F0E9] p-1 rounded-full mr-2">
                 <NavButton id="rooms" icon={Home} label="房況" />
                 <NavButton id="calendar" icon={CalendarIcon} label="月曆" />
-                <NavButton id="customers" icon={Users} label="客戶" />
+                <NavButton id="customers" icon={User} label="客戶" />
                 <NavButton id="finance" icon={DollarSign} label="帳務" />
             </div>
             
@@ -753,7 +762,7 @@ export default function App() {
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-[#EBE5D9] flex justify-around p-3 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] print:hidden">
            <button onClick={() => setActiveTab('rooms')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='rooms' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Home className="w-5 h-5"/><span className="text-[10px]">房況</span></button>
            <button onClick={() => setActiveTab('calendar')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='calendar' ? 'text-[#9A8478]' : 'text-gray-400'}`}><CalendarIcon className="w-5 h-5"/><span className="text-[10px]">月曆</span></button>
-           <button onClick={() => setActiveTab('customers')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='customers' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Users className="w-5 h-5"/><span className="text-[10px]">客戶</span></button>
+           <button onClick={() => setActiveTab('customers')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='customers' ? 'text-[#9A8478]' : 'text-gray-400'}`}><User className="w-5 h-5"/><span className="text-[10px]">客戶</span></button>
            <button onClick={() => setActiveTab('finance')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='finance' ? 'text-[#9A8478]' : 'text-gray-400'}`}><DollarSign className="w-5 h-5"/><span className="text-[10px]">帳務</span></button>
       </div>
 
@@ -766,7 +775,7 @@ export default function App() {
                             <Plus className="w-4 h-4"/> 新增預約
                         </button>
                         <button onClick={handleExportFutureBookings} className="bg-white border border-[#EBE5D9] text-[#8D7B68] px-4 py-2.5 rounded-xl shadow-sm flex items-center gap-2 text-sm font-bold w-full sm:w-auto justify-center hover:bg-[#F9F7F2]">
-                            <FileSpreadsheet className="w-4 h-4"/> 匯出未入住
+                            <FileText className="w-4 h-4"/> 匯出未入住
                         </button>
                     </div>
                     
@@ -786,7 +795,9 @@ export default function App() {
                             {cfg.rooms.map(rid => {
                                 const activeStay = bookings.find(x => x.roomId === rid && viewDate >= x.startDate && viewDate < x.endDate);
                                 const checkOutToday = bookings.find(x => x.roomId === rid && x.endDate === viewDate);
+                                
                                 const b = activeStay || checkOutToday;
+                                
                                 const isCheckIn = activeStay && activeStay.startDate === viewDate;
                                 const isCheckOut = checkOutToday && checkOutToday.endDate === viewDate;
                                 
@@ -811,6 +822,7 @@ export default function App() {
                                                         </span>
                                                     )}
                                                 </div>
+
                                                 <div className="font-bold flex items-center gap-1 text-[#5C554F] text-sm">{b.petName} {b.catCount > 1 && <span className="text-[10px] bg-[#9A8478] text-white px-1.5 rounded-full">{b.catCount}</span>}</div>
                                                 <div className="flex justify-between items-center mt-1">
                                                     <span className="text-[10px] text-[#A09890] truncate max-w-[60px]">{b.ownerName}</span>
@@ -837,7 +849,7 @@ export default function App() {
                     </div>
                     <h2 className="text-lg font-bold text-[#5C554F]">{currentMonth.getFullYear()}年 {currentMonth.getMonth()+1}月</h2>
                     <div className="flex gap-2 items-center">
-                        <button onClick={() => setIsSpecialDateModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-[#FDF2E9] text-[#D35400] rounded-lg text-sm font-bold shadow-sm hover:bg-[#FAE5D3]"><Sparkles className="w-4 h-4"/> 節日</button>
+                        <button onClick={() => setIsSpecialDateModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-[#FDF2E9] text-[#D35400] rounded-lg text-sm font-bold shadow-sm hover:bg-[#FAE5D3]"><Info className="w-4 h-4"/> 節日</button>
                         <button onClick={handleExportMonthReport} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-[#EBE5D9] text-[#8D7B68] rounded-lg text-sm font-bold shadow-sm hover:bg-[#F9F7F2]"><Download className="w-4 h-4"/> 月報</button>
                         <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg text-sm font-bold"><Printer className="w-4 h-4"/> 列印</button>
                     </div>
@@ -888,6 +900,7 @@ export default function App() {
                                                 statusLabel = "退房";
                                             } else {
                                                 cellStyle = "bg-[#E6E2D8] text-[#5E5550]";
+                                                statusLabel = "";
                                             }
                                         }
                                         return (
@@ -1025,12 +1038,12 @@ export default function App() {
         )}
       </main>
 
-      {/* 4. Special Date Modal (New) */}
+      {/* 4. Special Date Modal */}
       {isSpecialDateModalOpen && (
           <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
               <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden">
                   <div className="bg-[#FDF2E9] px-6 py-4 border-b border-[#F5CBA7] flex justify-between items-center">
-                      <h3 className="font-bold text-[#D35400] flex items-center gap-2"><Sparkles className="w-5 h-5"/> 特殊節日設定</h3>
+                      <h3 className="font-bold text-[#D35400] flex items-center gap-2"><Info className="w-5 h-5"/> 特殊節日設定</h3>
                       <button onClick={()=>setIsSpecialDateModalOpen(false)}><X className="text-[#A09890]"/></button>
                   </div>
                   <div className="p-6 space-y-4">
@@ -1058,7 +1071,7 @@ export default function App() {
           </div>
       )}
 
-      {/* 2. Booking Modal (With Room Selection) */}
+      {/* 2. Booking Modal */}
       {isBookingModalOpen && selectedRoom && (
           <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in zoom-in-95 duration-200">
               <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
@@ -1067,6 +1080,7 @@ export default function App() {
                       <button onClick={()=>setIsBookingModalOpen(false)}><X className="text-[#A09890]"/></button>
                   </div>
                   <div className="p-6 overflow-y-auto custom-scrollbar space-y-5 flex-1">
+                      
                       {formError && (
                           <div className="bg-[#FFF0F0] border border-[#FADBD8] text-[#C97C7C] p-3 rounded-xl text-sm font-bold flex items-center gap-2">
                               <AlertCircle className="w-4 h-4"/> {formError}
@@ -1119,11 +1133,12 @@ export default function App() {
                           </div>
                       </div>
                       <div className="space-y-1"><label className="text-xs font-bold text-[#9E968E]">備註</label><textarea rows="2" value={bookingForm.notes} onChange={e=>updateBooking('notes',e.target.value)} className={`w-full p-3 rounded-xl border ${THEME.input}`}/></div>
-                      {!customers.find(c=>c.name===bookingForm.ownerName) && bookingForm.ownerName && <button onClick={handleSaveCustomerFromBooking} className="w-full py-2 bg-[#EAE4D6] text-[#8D7B68] rounded-lg text-sm font-bold">+ 存為新客戶</button>}
+                      {!customers.find(c=>c.name===bookingForm.ownerName) && bookingForm.ownerName && <button type="button" onClick={handleSaveCustomerFromBooking} className="w-full py-2 bg-[#EAE4D6] text-[#8D7B68] rounded-lg text-sm font-bold">+ 存為新客戶</button>}
                   </div>
                   <div className="p-4 border-t flex gap-3 bg-white justify-between">
                       {editingBookingId ? (
                           <button 
+                            type="button"
                             onClick={()=>deleteBooking(editingBookingId)} 
                             className="p-3 bg-[#FFF0F0] text-[#C97C7C] rounded-xl flex items-center gap-2 text-sm font-bold border border-[#FADBD8] hover:bg-[#FCE4E4]"
                           >
@@ -1132,8 +1147,9 @@ export default function App() {
                       ) : <div></div>}
                       
                       <div className="flex gap-3">
-                          <button onClick={()=>setIsBookingModalOpen(false)} className="px-6 py-3 border rounded-xl text-[#A09890] font-bold hover:bg-gray-50">取消</button>
+                          <button type="button" onClick={()=>setIsBookingModalOpen(false)} className="px-6 py-3 border rounded-xl text-[#A09890] font-bold hover:bg-gray-50">取消</button>
                           <button 
+                            type="button"
                             onClick={handleBookingSubmit} 
                             disabled={isSubmitting}
                             className={`px-6 py-3 ${THEME.primary} text-white rounded-xl font-bold shadow-md flex justify-center items-center gap-2 hover:bg-[#826A5D] ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -1178,7 +1194,7 @@ export default function App() {
                       <section>
                           <div className="flex justify-between items-center mb-4">
                               <h4 className="text-sm font-bold text-[#A09890] uppercase tracking-wider flex items-center gap-2"><Cat className="w-4 h-4"/> 寵物名單</h4>
-                              {!isViewMode && !isPetFormVisible && <button onClick={() => handleEditPet(-1)} className="text-xs bg-[#9A8478] text-white px-3 py-1.5 rounded-lg font-bold hover:bg-[#826A5D] transition-colors flex items-center gap-1"><Plus className="w-3 h-3"/> 新增寵物</button>}
+                              {!isViewMode && !isPetFormVisible && <button type="button" onClick={() => handleEditPet(-1)} className="text-xs bg-[#9A8478] text-white px-3 py-1.5 rounded-lg font-bold hover:bg-[#826A5D] transition-colors flex items-center gap-1"><Plus className="w-3 h-3"/> 新增寵物</button>}
                           </div>
 
                           {!isPetFormVisible && (
@@ -1192,7 +1208,7 @@ export default function App() {
                                               <div className="text-xs text-[#A09890] mt-1 truncate">{p.personality || '無個性描述'}</div>
                                           </div>
                                           <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                              {isViewMode ? <button onClick={()=>{setTempPet(p); setIsPetFormVisible(true)}} className="p-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg"><Eye className="w-4 h-4"/></button> : <><button onClick={()=>{setTempPet(p); setEditingPetIndex(i); setIsPetFormVisible(true)}} className="p-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg"><Edit className="w-4 h-4"/></button><button onClick={()=>handleDeletePet(i)} className="p-1.5 bg-[#FFF0F0] text-[#C97C7C] rounded-lg"><Trash2 className="w-4 h-4"/></button></>}
+                                              {isViewMode ? <button type="button" onClick={()=>{setTempPet(p); setIsPetFormVisible(true)}} className="p-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg"><Eye className="w-4 h-4"/></button> : <><button type="button" onClick={()=>{setTempPet(p); setEditingPetIndex(i); setIsPetFormVisible(true)}} className="p-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg"><Edit className="w-4 h-4"/></button><button type="button" onClick={()=>handleDeletePet(i)} className="p-1.5 bg-[#FFF0F0] text-[#C97C7C] rounded-lg"><Trash2 className="w-4 h-4"/></button></>}
                                           </div>
                                       </div>
                                   ))}
@@ -1204,7 +1220,7 @@ export default function App() {
                               <div className="bg-white p-6 rounded-2xl border border-[#EBE5D9] shadow-sm animate-in zoom-in-95 duration-200">
                                   <div className="flex justify-between items-center mb-6 border-b border-[#F2F0E9] pb-4">
                                       <h5 className="font-bold text-[#9A8478] flex items-center gap-2"><Cat className="w-5 h-5"/> {isViewMode ? '寵物詳細資料' : (editingPetIndex>=0?'編輯寵物':'新增寵物')}</h5>
-                                      <button onClick={()=>setIsPetFormVisible(false)} className="text-sm text-[#A09890] hover:text-[#5C554F] bg-[#F9F7F2] px-3 py-1 rounded-lg">關閉</button>
+                                      <button type="button" onClick={()=>setIsPetFormVisible(false)} className="text-sm text-[#A09890] hover:text-[#5C554F] bg-[#F9F7F2] px-3 py-1 rounded-lg">關閉</button>
                                   </div>
                                   <div className="flex flex-col lg:flex-row gap-8">
                                       <div className="flex flex-col items-center gap-4 lg:w-48 flex-shrink-0">
@@ -1219,8 +1235,8 @@ export default function App() {
                                               <div className="space-y-1"><label className="text-xs font-bold text-[#9E968E]">個性</label><input disabled={isViewMode} value={tempPet.personality} onChange={e=>setTempPet({...tempPet, personality:e.target.value})} className={`w-full p-2 rounded-lg border ${THEME.input}`}/></div>
                                           </div>
                                           <div className="grid grid-cols-2 gap-4 bg-[#F9F7F2] p-4 rounded-xl">
-                                              <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">性別</label><div className="flex gap-2">{['boy:男生','girl:女生'].map(o=>{const[v,l]=o.split(':');return<button key={v} disabled={isViewMode} onClick={()=>setTempPet({...tempPet, gender:v})} className={`flex-1 py-1.5 text-sm rounded-lg border ${tempPet.gender===v?(v==='boy'?'bg-blue-100 border-blue-300 text-blue-600':'bg-pink-100 border-pink-300 text-pink-600'):'bg-white text-gray-400'}`}>{l}</button>})}</div></div>
-                                              <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">結紮</label><div className="flex gap-2">{['yes:已結紮','no:未結紮'].map(o=>{const[v,l]=o.split(':');return<button key={v} disabled={isViewMode} onClick={()=>setTempPet({...tempPet, isNeutered:v})} className={`flex-1 py-1.5 text-sm rounded-lg border ${tempPet.isNeutered===v?'bg-[#EAE4D6] border-[#D6CDB8] text-[#8D7B68]':'bg-white text-gray-400'}`}>{l}</button>})}</div></div>
+                                              <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">性別</label><div className="flex gap-2">{['boy:男生','girl:女生'].map(o=>{const[v,l]=o.split(':');return<button key={v} type="button" disabled={isViewMode} onClick={()=>setTempPet({...tempPet, gender:v})} className={`flex-1 py-1.5 text-sm rounded-lg border ${tempPet.gender===v?(v==='boy'?'bg-blue-100 border-blue-300 text-blue-600':'bg-pink-100 border-pink-300 text-pink-600'):'bg-white text-gray-400'}`}>{l}</button>})}</div></div>
+                                              <div className="space-y-1"><label className="text-xs font-bold text-[#9A8478]">結紮</label><div className="flex gap-2">{['yes:已結紮','no:未結紮'].map(o=>{const[v,l]=o.split(':');return<button key={v} type="button" disabled={isViewMode} onClick={()=>setTempPet({...tempPet, isNeutered:v})} className={`flex-1 py-1.5 text-sm rounded-lg border ${tempPet.isNeutered===v?'bg-[#EAE4D6] border-[#D6CDB8] text-[#8D7B68]':'bg-white text-gray-400'}`}>{l}</button>})}</div></div>
                                           </div>
                                           <div className="space-y-4">
                                               <h6 className="text-xs font-bold text-[#A09890] uppercase tracking-wider flex items-center gap-1"><Stethoscope className="w-3 h-3"/> 健康與習慣</h6>
@@ -1256,27 +1272,28 @@ export default function App() {
                                           <div className="pt-4 border-t border-[#F2F0E9]">
                                               <label className="text-xs font-bold text-[#9E968E] mb-2 block">疫苗本照片</label>
                                               {tempPet.vaccinationBook ? (
-                                                  <div className="relative group w-40 h-28 rounded-lg overflow-hidden border bg-[#F9F7F2]"><img src={tempPet.vaccinationBook} className="w-full h-full object-cover"/>{!isViewMode && <button onClick={()=>setTempPet({...tempPet, vaccinationBook:null})} className="absolute top-1 right-1 bg-white rounded-full p-1 shadow text-red-400"><X className="w-3 h-3"/></button>}</div>
+                                                  <div className="relative group w-40 h-28 rounded-lg overflow-hidden border bg-[#F9F7F2]"><img src={tempPet.vaccinationBook} className="w-full h-full object-cover"/>{!isViewMode && <button type="button" onClick={()=>setTempPet({...tempPet, vaccinationBook:null})} className="absolute top-1 right-1 bg-white rounded-full p-1 shadow text-red-400"><X className="w-3 h-3"/></button>}</div>
                                               ) : (
                                                   !isViewMode && <label className="cursor-pointer w-40 h-28 border-2 border-dashed border-[#EBE5D9] rounded-lg flex flex-col items-center justify-center text-[#D6CDB8] hover:bg-[#F9F7F2] transition-colors"><FileImage className="w-6 h-6 mb-1"/><span className="text-xs">上傳照片</span><input type="file" className="hidden" accept="image/*" onChange={e=>handlePetImageUpload(e, 'vaccinationBook')}/></label>
                                               )}
                                           </div>
-                                          {!isViewMode && <button onClick={handleSavePet} className={`w-full py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md`}>{editingPetIndex>=0?'更新寵物資料':'加入此寵物'}</button>}
+                                          {!isViewMode && <button type="button" onClick={handleSavePet} className={`w-full py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md`}>{editingPetIndex>=0?'更新寵物資料':'加入此寵物'}</button>}
                                       </div>
                                   </div>
                               </div>
                           )}
                       </section>
                   </div>
-                  {!isViewMode && <div className="p-6 border-t border-[#EBE5D9] bg-white flex gap-4 sticky bottom-0 z-10"><button onClick={()=>setIsCustomerModalOpen(false)} className="flex-1 py-3 border rounded-xl font-bold text-[#A09890]">取消</button>
+                  {!isViewMode && <div className="p-6 border-t border-[#EBE5D9] bg-white flex gap-4 sticky bottom-0 z-10"><button type="button" onClick={()=>setIsCustomerModalOpen(false)} className="flex-1 py-3 border rounded-xl font-bold text-[#A09890]">取消</button>
                   <button 
+                    type="button"
                     onClick={handleCustomerSubmit} 
                     disabled={isSubmitting}
                     className={`flex-1 py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md flex justify-center items-center gap-2 ${isSubmitting ? 'opacity-50' : ''}`}
                   >
                       {isSubmitting ? '儲存中...' : '儲存客戶資料'}
                   </button></div>}
-                  {isViewMode && <div className="p-6 border-t border-[#EBE5D9] bg-white sticky bottom-0 z-10"><button onClick={()=>setIsViewMode(false)} className={`w-full py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md flex justify-center items-center gap-2`}><Edit className="w-4 h-4"/> 編輯資料</button></div>}
+                  {isViewMode && <div className="p-6 border-t border-[#EBE5D9] bg-white sticky bottom-0 z-10"><button type="button" onClick={()=>setIsViewMode(false)} className={`w-full py-3 ${THEME.primary} text-white font-bold rounded-xl shadow-md flex justify-center items-center gap-2`}><Edit className="w-4 h-4"/> 編輯資料</button></div>}
               </div>
           </div>
       )}
@@ -1325,18 +1342,6 @@ export default function App() {
            </div>
       )}
 
-      {/* Auth Modal */}
-      {isAuthModalOpen && (
-        <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-             <div className="bg-white p-8 rounded-3xl max-w-sm w-full space-y-6 shadow-2xl">
-                 <div className="text-center"><div className="bg-[#F9F7F2] w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"><User className="w-6 h-6 text-[#9A8478]"/></div><h2 className="text-xl font-bold text-[#5C554F]">管理員登入</h2></div>
-                 <div className="space-y-3"><input type="email" placeholder="Email" className={`w-full p-3 rounded-xl border ${THEME.input}`} value={authForm.email} onChange={e=>setAuthForm({...authForm, email:e.target.value})}/><input type="password" placeholder="Password" className={`w-full p-3 rounded-xl border ${THEME.input}`} value={authForm.password} onChange={e=>setAuthForm({...authForm, password:e.target.value})}/></div>
-                 <button onClick={authMode==='login'?handleLogin:handleRegister} className={`w-full py-3 ${THEME.primary} text-white rounded-xl font-bold shadow-md`}>{authMode==='login'?'登入':'註冊'}</button>
-                 <div className="flex justify-between text-xs mt-2"><button onClick={()=>setIsAuthModalOpen(false)} className="text-[#A09890]">暫不登入</button><button onClick={()=>setAuthMode(m=>m==='login'?'reg':'login')} className="text-[#9A8478] underline">{authMode==='login'?'註冊帳號':'返回登入'}</button></div>
-             </div>
-        </div>
-      )}
-      
       {/* Toast Notification */}
       {toast.show && (
           <div className={`fixed bottom-4 right-4 px-6 py-3 rounded-xl shadow-lg transform transition-all duration-300 animate-in slide-in-from-bottom-5 z-50 flex items-center gap-2 ${toast.type === 'danger' ? 'bg-[#FFF0F0] text-[#C97C7C] border border-[#FADBD8]' : 'bg-[#F0F9F4] text-[#6B9E78] border border-[#E0EFE6]'}`}>
