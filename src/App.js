@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar as CalendarIcon, Clock, User, Cat, Trash2, Plus, X, 
   ChevronLeft, ChevronRight, LayoutGrid, Users, Search, Save, LogIn, LogOut, UserPlus, Home, Share2,
-  Eye, Edit, Download, Upload, Image as ImageIcon, Phone, AlertCircle, CheckCircle, Info, FileText, MapPin, Heart, Shield, FileImage, AlertTriangle, Bell, Copy, MessageSquare, DollarSign, Wallet, Calculator, Check, Stethoscope, Utensils, Printer, FileSpreadsheet, Sparkles, StickyNote
+  Eye, Edit, Download, Upload, Image as ImageIcon, Phone, AlertCircle, CheckCircle, Info, FileText, MapPin, Heart, Shield, FileImage, AlertTriangle, Bell, Copy, MessageSquare, DollarSign, Wallet, Calculator, Check, Stethoscope, Utensils, Printer, FileSpreadsheet, Sparkles, StickyNote, List
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -176,6 +176,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('rooms');
   const [viewDate, setViewDate] = useState(formatDate(new Date()));
   const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  const [bookingStatusFilter, setBookingStatusFilter] = useState('active'); 
 
   // Modals
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
@@ -370,24 +372,38 @@ export default function App() {
 
   const handleBookingSubmit = async () => {
     setFormError('');
+    
+    // 1. 必填檢查
     if (!bookingForm.ownerName || !bookingForm.petName) { 
         setFormError('請填寫完整資訊 (飼主與寵物名)'); 
         return; 
+    }
+
+    // 2. 金額防呆檢查 (新增)
+    if (bookingForm.totalAmount === '' || parseInt(bookingForm.totalAmount) < 0) {
+        setFormError('總金額不能為空或負數');
+        return;
     }
     
     setIsSubmitting(true);
 
     try {
+        // 3. 衝突檢查 (強化版)
         const conflict = bookings.find(b => {
+            // 如果是編輯模式，先排除自己 (轉字串比較最保險)
             if (editingBookingId && String(b.id) === String(editingBookingId)) return false;
+            
+            // 強制轉字串比較 Room ID，避免數字與字串不符
+            const isSameRoom = String(b.roomId) === String(selectedRoom.id);
+            
             return (
-                b.roomId === selectedRoom.id && 
+                isSameRoom && 
                 isDateOverlap(b.startDate, b.endDate, bookingForm.startDate, bookingForm.endDate)
             );
         });
 
         if (conflict) { 
-            setFormError(`時間衝突！此時段已被預約`);
+            setFormError(`時間衝突！此時段已被 ${conflict.petName} 預約`);
             setIsSubmitting(false);
             return; 
         }
@@ -580,6 +596,27 @@ export default function App() {
     );
   }, [customerSearchQuery, customers]);
 
+  // --- New Booking Filter Logic ---
+  const filteredBookingList = useMemo(() => {
+      const today = formatDate(new Date());
+      let list = [];
+      
+      switch (bookingStatusFilter) {
+          case 'upcoming': // 即將入住
+              list = bookings.filter(b => b.startDate > today);
+              break;
+          case 'active': // 入住中
+              list = bookings.filter(b => b.startDate <= today && b.endDate >= today);
+              break;
+          case 'past': // 歷史紀錄
+              list = bookings.filter(b => b.endDate < today);
+              break;
+          default:
+              list = bookings;
+      }
+      return list.sort((a,b) => bookingStatusFilter === 'past' ? b.startDate.localeCompare(a.startDate) : a.startDate.localeCompare(b.startDate));
+  }, [bookings, bookingStatusFilter]);
+
   const reminders = useMemo(() => {
       const tmr = formatDate(new Date(new Date().setDate(new Date().getDate() + 1)));
       return { 
@@ -744,6 +781,7 @@ export default function App() {
         <div className="flex gap-2 items-center">
             <div className="hidden md:flex bg-[#F2F0E9] p-1 rounded-full mr-2">
                 <NavButton id="rooms" icon={Home} label="房況" />
+                <NavButton id="list" icon={List} label="列表" />
                 <NavButton id="calendar" icon={CalendarIcon} label="月曆" />
                 <NavButton id="customers" icon={Users} label="客戶" />
                 <NavButton id="finance" icon={DollarSign} label="帳務" />
@@ -763,12 +801,14 @@ export default function App() {
       {/* Mobile Tab Bar */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-[#EBE5D9] flex justify-around p-3 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] print:hidden">
            <button onClick={() => setActiveTab('rooms')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='rooms' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Home className="w-5 h-5"/><span className="text-[10px]">房況</span></button>
+           <button onClick={() => setActiveTab('list')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='list' ? 'text-[#9A8478]' : 'text-gray-400'}`}><List className="w-5 h-5"/><span className="text-[10px]">列表</span></button>
            <button onClick={() => setActiveTab('calendar')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='calendar' ? 'text-[#9A8478]' : 'text-gray-400'}`}><CalendarIcon className="w-5 h-5"/><span className="text-[10px]">月曆</span></button>
            <button onClick={() => setActiveTab('customers')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='customers' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Users className="w-5 h-5"/><span className="text-[10px]">客戶</span></button>
            <button onClick={() => setActiveTab('finance')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='finance' ? 'text-[#9A8478]' : 'text-gray-400'}`}><DollarSign className="w-5 h-5"/><span className="text-[10px]">帳務</span></button>
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-6 mb-16 md:mb-0 print-full">
+        {/* --- ROOMS TAB --- */}
         {activeTab === 'rooms' && (
             <div className="space-y-6 animate-in fade-in duration-500">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
@@ -797,9 +837,7 @@ export default function App() {
                             {cfg.rooms.map(rid => {
                                 const activeStay = bookings.find(x => x.roomId === rid && viewDate >= x.startDate && viewDate < x.endDate);
                                 const checkOutToday = bookings.find(x => x.roomId === rid && x.endDate === viewDate);
-                                
                                 const b = activeStay || checkOutToday;
-                                
                                 const isCheckIn = activeStay && activeStay.startDate === viewDate;
                                 const isCheckOut = checkOutToday && checkOutToday.endDate === viewDate;
                                 
@@ -824,7 +862,6 @@ export default function App() {
                                                         </span>
                                                     )}
                                                 </div>
-
                                                 <div className="font-bold flex items-center gap-1 text-[#5C554F] text-sm">{b.petName} {b.catCount > 1 && <span className="text-[10px] bg-[#9A8478] text-white px-1.5 rounded-full">{b.catCount}</span>}</div>
                                                 <div className="flex justify-between items-center mt-1">
                                                     <span className="text-[10px] text-[#A09890] truncate max-w-[60px]">{b.ownerName}</span>
@@ -841,7 +878,56 @@ export default function App() {
             </div>
         )}
 
-        {/* --- 甘特圖月曆區域 --- */}
+        {/* --- BOOKING LIST TAB (NEW) --- */}
+        {activeTab === 'list' && (
+            <div className="space-y-6 animate-in fade-in">
+                {/* Filter Tabs */}
+                <div className="flex p-1 bg-white rounded-xl shadow-sm border border-[#EBE5D9] w-full max-w-md mx-auto">
+                     <button onClick={() => setBookingStatusFilter('active')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${bookingStatusFilter==='active' ? 'bg-[#9A8478] text-white shadow' : 'text-[#A09890] hover:bg-[#F2F0E9]'}`}>入住中</button>
+                     <button onClick={() => setBookingStatusFilter('upcoming')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${bookingStatusFilter==='upcoming' ? 'bg-[#9A8478] text-white shadow' : 'text-[#A09890] hover:bg-[#F2F0E9]'}`}>即將入住</button>
+                     <button onClick={() => setBookingStatusFilter('past')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${bookingStatusFilter==='past' ? 'bg-[#9A8478] text-white shadow' : 'text-[#A09890] hover:bg-[#F2F0E9]'}`}>歷史紀錄</button>
+                </div>
+
+                <div className="space-y-3">
+                    {filteredBookingList.length === 0 ? (
+                        <div className="text-center text-[#D6CDB8] py-12 flex flex-col items-center gap-2">
+                            <Cat className="w-12 h-12 opacity-50"/>
+                            <span>目前沒有此類別的預約</span>
+                        </div>
+                    ) : (
+                        filteredBookingList.map(b => {
+                             const days = Math.ceil((new Date(b.endDate) - new Date(b.startDate)) / (86400000));
+                             return (
+                                <div key={b.id} onClick={() => handleOpenBookingModal(b.roomId, b.roomType, null, b)} className="bg-white p-4 rounded-2xl border border-[#EBE5D9] shadow-sm hover:border-[#D6CDB8] transition-all cursor-pointer flex justify-between items-center group">
+                                     <div className="flex gap-4 items-center">
+                                         <div className="flex flex-col items-center justify-center bg-[#F9F7F2] w-16 h-16 rounded-xl border border-[#EBE5D9] flex-shrink-0">
+                                             <span className="text-[10px] text-[#A09890] font-bold">{b.startDate.split('-')[1]}/{b.startDate.split('-')[2]}</span>
+                                             <span className="text-sm font-bold text-[#5C554F]">{days}晚</span>
+                                         </div>
+                                         <div className="min-w-0">
+                                             <div className="flex items-center gap-2 mb-1">
+                                                 <span className={`text-[10px] px-2 py-0.5 rounded ${ROOM_CONFIG[b.roomType]?.tag || 'bg-gray-100'}`}>{b.roomId}</span>
+                                                 <span className="font-bold text-[#5C554F] text-lg truncate">{b.petName}</span>
+                                             </div>
+                                             <div className="text-xs text-[#A09890] flex items-center gap-2">
+                                                <User className="w-3 h-3"/> {b.ownerName}
+                                                {b.balance > 0 && <span className="text-[#C97C7C] font-bold bg-[#FFF0F0] px-1 rounded">欠款 ${b.balance}</span>}
+                                             </div>
+                                         </div>
+                                     </div>
+                                     <div className="text-xs text-[#A09890] font-bold hidden sm:block">
+                                         {b.startDate} ~ {b.endDate}
+                                     </div>
+                                     <ChevronRight className="w-5 h-5 text-[#D6CDB8] group-hover:text-[#9A8478]"/>
+                                </div>
+                             );
+                        })
+                    )}
+                </div>
+            </div>
+        )}
+
+        {/* --- CALENDAR TAB --- */}
         {activeTab === 'calendar' && (
             <div className="overflow-hidden flex flex-col h-[calc(100vh-140px)] animate-in fade-in">
                 <div className="flex justify-between items-center bg-white p-3 rounded-t-2xl shadow-sm border border-[#EBE5D9] mx-4 mt-4 flex-shrink-0">
@@ -851,11 +937,6 @@ export default function App() {
                     </div>
                     <h2 className="text-lg font-bold text-[#5C554F]">{currentMonth.getFullYear()}年 {currentMonth.getMonth()+1}月</h2>
                     <div className="flex gap-2 items-center">
-                        <div className="hidden md:flex gap-3 text-xs mr-4">
-                             <div className="flex items-center gap-1"><span className="w-3 h-3 bg-[#94A89A] rounded-sm"></span>入住</div>
-                             <div className="flex items-center gap-1"><span className="w-3 h-3 bg-[#E6E2D8] rounded-sm"></span>續住</div>
-                             <div className="flex items-center gap-1"><span className="w-3 h-3 bg-[#C88D7D] rounded-sm"></span>退房</div>
-                        </div>
                         <button onClick={() => setIsSpecialDateModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-[#FDF2E9] text-[#D35400] rounded-lg text-sm font-bold shadow-sm hover:bg-[#FAE5D3]"><Sparkles className="w-4 h-4"/> 節日</button>
                         <button onClick={handleExportMonthReport} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-[#EBE5D9] text-[#8D7B68] rounded-lg text-sm font-bold shadow-sm hover:bg-[#F9F7F2]"><Download className="w-4 h-4"/> 月報</button>
                         <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg text-sm font-bold"><Printer className="w-4 h-4"/> 列印</button>
@@ -907,7 +988,6 @@ export default function App() {
                                                 statusLabel = "退房";
                                             } else {
                                                 cellStyle = "bg-[#E6E2D8] text-[#5E5550]";
-                                                statusLabel = "";
                                             }
                                         }
                                         return (
@@ -1036,7 +1116,6 @@ export default function App() {
                                              </span>
                                          ))}
                                      </div>
-                                     {/* 列表也顯示備註 */}
                                      {c.notes && <div className="mt-2 text-xs text-[#A09890] bg-[#F9F7F2] p-2 rounded-lg truncate"><Info className="w-3 h-3 inline mr-1"/>{c.notes}</div>}
                                  </div>
                              ))}
@@ -1128,7 +1207,7 @@ export default function App() {
                           </div>
                       </div>
 
-                      {/* 自動顯示客戶備註 (New Feature) */}
+                      {/* 自動顯示客戶備註 */}
                       {(() => {
                           const linkedCustomer = customers.find(c => c.name === bookingForm.ownerName);
                           if (linkedCustomer && linkedCustomer.notes) {
@@ -1173,7 +1252,7 @@ export default function App() {
                             onClick={()=>deleteBooking(editingBookingId)} 
                             className="p-3 bg-[#FFF0F0] text-[#C97C7C] rounded-xl flex items-center gap-2 text-sm font-bold border border-[#FADBD8] hover:bg-[#FCE4E4]"
                           >
-                              <Trash2 className="w-4 h-4"/> 刪除
+                              <Trash2 className="w-4 h-4"/> 刪除預約
                           </button>
                       ) : <div></div>}
                       
@@ -1193,7 +1272,7 @@ export default function App() {
           </div>
       )}
 
-      {/* 1. Customer Modal (Fixed Crash & Added Notes) */}
+      {/* 1. Customer Modal (Full Features) */}
       {isCustomerModalOpen && (
           <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in zoom-in-95 duration-200">
               <div className="bg-[#F9F7F2] rounded-3xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] border border-[#EBE5D9] overflow-hidden">
@@ -1372,32 +1451,65 @@ export default function App() {
           </div>
       )}
 
-      {/* Reminder Modal */}
-      {isReminderModalOpen && (
+      {/* Reminder Modal - 防當機修復版 */}
+      {isReminderModalOpen && reminders && (
            <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
                 <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
-                    <div className="px-6 py-4 bg-[#F9F7F2] border-b flex justify-between items-center"><h3 className="font-bold flex gap-2 text-[#5C554F]"><Bell className="w-5 h-5 text-[#9A8478]"/> 明日提醒</h3><button onClick={()=>setIsReminderModalOpen(false)}><X/></button></div>
+                    <div className="px-6 py-4 bg-[#F9F7F2] border-b border-[#EBE5D9] flex justify-between items-center">
+                        <h3 className="font-bold flex gap-2 text-[#5C554F] items-center">
+                            <Bell className="w-5 h-5 text-[#9A8478]"/> 明日提醒
+                        </h3>
+                        <button onClick={()=>setIsReminderModalOpen(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                            <X className="w-5 h-5 text-[#A09890]"/>
+                        </button>
+                    </div>
                     <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
-                        {reminders.ins.length===0 && reminders.outs.length===0 && <div className="text-center text-[#D6CDB8] py-8">明日無特別事項</div>}
-                        {reminders.ins.length>0 && <div><h4 className="text-xs font-bold text-[#94A89A] mb-2 uppercase tracking-wider">明日入住</h4><div className="space-y-2">{reminders.ins.map(b=><div key={b.id} className="bg-[#F0F9F4] p-3 rounded-xl border border-[#E0EFE6] flex justify-between items-center"><div><div className="font-bold text-[#5C554F]">{b.petName}</div><div className="text-xs text-[#A09890]">{b.ownerName}</div></div><button onClick={()=>copyText(`提醒您明天是${b.petName}入住的日子`)} className="p-2 bg-white rounded-lg shadow-sm text-[#94A89A]"><Copy className="w-4 h-4"/></button></div>)}</div></div>}
-                        {reminders.outs.length>0 && <div><h4 className="text-xs font-bold text-[#C97C7C] mb-2 uppercase tracking-wider">明日退房</h4><div className="space-y-2">{reminders.outs.map(b=><div key={b.id} className="bg-[#FFF5F5] p-3 rounded-xl border border-[#FFE0E0] flex justify-between items-center"><div><div className="font-bold text-[#5C554F]">{b.petName}</div><div className="text-xs text-[#A09890]">{b.ownerName}</div></div><button onClick={()=>copyText(`提醒您明天是${b.petName}退房的日子`)} className="p-2 bg-white rounded-lg shadow-sm text-[#C97C7C]"><Copy className="w-4 h-4"/></button></div>)}</div></div>}
+                        {(!reminders.ins?.length && !reminders.outs?.length) && (
+                            <div className="text-center text-[#D6CDB8] py-8">明日無特別事項</div>
+                        )}
+                        
+                        {reminders.ins?.length > 0 && (
+                            <div>
+                                <h4 className="text-xs font-bold text-[#94A89A] mb-2 uppercase tracking-wider">明日入住</h4>
+                                <div className="space-y-2">
+                                    {reminders.ins.map(b=>(
+                                        <div key={b.id} className="bg-[#F0F9F4] p-3 rounded-xl border border-[#E0EFE6] flex justify-between items-center">
+                                            <div>
+                                                <div className="font-bold text-[#5C554F]">{b.petName}</div>
+                                                <div className="text-xs text-[#A09890]">{b.ownerName}</div>
+                                            </div>
+                                            <button onClick={()=>copyText(`提醒您明天是${b.petName}入住的日子`)} className="px-3 py-1 bg-white rounded-lg shadow-sm text-[#94A89A] text-xs font-bold border border-[#E0EFE6]">
+                                                複製
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {reminders.outs?.length > 0 && (
+                            <div>
+                                <h4 className="text-xs font-bold text-[#C97C7C] mb-2 uppercase tracking-wider">明日退房</h4>
+                                <div className="space-y-2">
+                                    {reminders.outs.map(b=>(
+                                        <div key={b.id} className="bg-[#FFF5F5] p-3 rounded-xl border border-[#FFE0E0] flex justify-between items-center">
+                                            <div>
+                                                <div className="font-bold text-[#5C554F]">{b.petName}</div>
+                                                <div className="text-xs text-[#A09890]">{b.ownerName}</div>
+                                            </div>
+                                            <button onClick={()=>copyText(`提醒您明天是${b.petName}退房的日子`)} className="px-3 py-1 bg-white rounded-lg shadow-sm text-[#C97C7C] text-xs font-bold border border-[#FFE0E0]">
+                                                複製
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
            </div>
       )}
 
-      {/* Auth Modal */}
-      {isAuthModalOpen && (
-        <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-             <div className="bg-white p-8 rounded-3xl max-w-sm w-full space-y-6 shadow-2xl">
-                 <div className="text-center"><div className="bg-[#F9F7F2] w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"><User className="w-6 h-6 text-[#9A8478]"/></div><h2 className="text-xl font-bold text-[#5C554F]">管理員登入</h2></div>
-                 <div className="space-y-3"><input type="email" placeholder="Email" className={`w-full p-3 rounded-xl border ${THEME.input}`} value={authForm.email} onChange={e=>setAuthForm({...authForm, email:e.target.value})}/><input type="password" placeholder="Password" className={`w-full p-3 rounded-xl border ${THEME.input}`} value={authForm.password} onChange={e=>setAuthForm({...authForm, password:e.target.value})}/></div>
-                 <button onClick={authMode==='login'?handleLogin:handleRegister} className={`w-full py-3 ${THEME.primary} text-white rounded-xl font-bold shadow-md`}>{authMode==='login'?'登入':'註冊'}</button>
-                 <div className="flex justify-between text-xs mt-2"><button onClick={()=>setIsAuthModalOpen(false)} className="text-[#A09890]">暫不登入</button><button onClick={()=>setAuthMode(m=>m==='login'?'reg':'login')} className="text-[#9A8478] underline">{authMode==='login'?'註冊帳號':'返回登入'}</button></div>
-             </div>
-        </div>
-      )}
-      
       {/* Toast Notification */}
       {toast.show && (
           <div className={`fixed bottom-4 right-4 px-6 py-3 rounded-xl shadow-lg transform transition-all duration-300 animate-in slide-in-from-bottom-5 z-50 flex items-center gap-2 ${toast.type === 'danger' ? 'bg-[#FFF0F0] text-[#C97C7C] border border-[#FADBD8]' : 'bg-[#F0F9F4] text-[#6B9E78] border border-[#E0EFE6]'}`}>
