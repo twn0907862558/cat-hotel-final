@@ -308,6 +308,60 @@ export default function App() {
       return { days, total: days * (basePrice + extraFee), basePrice, extraFee };
   }, [selectedRoom, bookingForm.startDate, bookingForm.endDate, bookingForm.catCount]);
 
+  // --- NEW: Date Hint/Conflict Logic ---
+  const dateHints = useMemo(() => {
+    if (!selectedRoom) return { start: [], end: [] };
+    
+    // 找出同房號的預約 (排除自己正在編輯的)
+    const roomBookings = bookings.filter(b => 
+        String(b.roomId) === String(selectedRoom.id) && 
+        String(b.id) !== String(editingBookingId)
+    );
+
+    const getHintsForDate = (dateStr, isStart) => {
+        if (!dateStr) return [];
+        const hints = [];
+        roomBookings.forEach(b => {
+            // 檢查入住日
+            if (isStart) {
+                // 如果有人在這天退房 -> 提示前房客資訊
+                if (b.endDate === dateStr) {
+                    hints.push({ type: 'info', msg: `前房客 (${b.petName}) 於 ${b.checkOutTime || '11:00'} 退房` });
+                }
+                // 如果有人在這天入住 -> 衝突
+                if (b.startDate === dateStr) {
+                    hints.push({ type: 'danger', msg: `⚠️ 撞期：${b.petName} 於 ${b.checkInTime || '14:00'} 入住` });
+                }
+                // 如果這個日期落在別人入住期間
+                if (dateStr > b.startDate && dateStr < b.endDate) {
+                    hints.push({ type: 'danger', msg: `⚠️ 撞期：${b.petName} 入住中 (${b.startDate}~${b.endDate})` });
+                }
+            } 
+            // 檢查退房日
+            else {
+                // 如果有人在這天入住 -> 提示下房客資訊
+                if (b.startDate === dateStr) {
+                    hints.push({ type: 'info', msg: `下位房客 (${b.petName}) 於 ${b.checkInTime || '14:00'} 入住` });
+                }
+                // 如果有人在這天退房 -> 衝突
+                if (b.endDate === dateStr) {
+                     hints.push({ type: 'danger', msg: `⚠️ 撞期：${b.petName} 於 ${b.checkOutTime || '11:00'} 退房` });
+                }
+                if (dateStr > b.startDate && dateStr < b.endDate) {
+                    hints.push({ type: 'danger', msg: `⚠️ 撞期：${b.petName} 入住中 (${b.startDate}~${b.endDate})` });
+                }
+            }
+        });
+        return hints;
+    };
+
+    return {
+        start: getHintsForDate(bookingForm.startDate, true),
+        end: getHintsForDate(bookingForm.endDate, false)
+    };
+  }, [bookings, selectedRoom, editingBookingId, bookingForm.startDate, bookingForm.endDate]);
+
+
   // --- Form Updates ---
   const updateBooking = (field, val) => {
       const next = { ...bookingForm, [field]: val };
@@ -883,9 +937,9 @@ export default function App() {
             <div className="space-y-6 animate-in fade-in">
                 {/* Filter Tabs */}
                 <div className="flex p-1 bg-white rounded-xl shadow-sm border border-[#EBE5D9] w-full max-w-md mx-auto">
-                     <button onClick={() => setBookingStatusFilter('active')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${bookingStatusFilter==='active' ? 'bg-[#9A8478] text-white shadow' : 'text-[#A09890] hover:bg-[#F2F0E9]'}`}>入住中</button>
-                     <button onClick={() => setBookingStatusFilter('upcoming')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${bookingStatusFilter==='upcoming' ? 'bg-[#9A8478] text-white shadow' : 'text-[#A09890] hover:bg-[#F2F0E9]'}`}>即將入住</button>
-                     <button onClick={() => setBookingStatusFilter('past')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${bookingStatusFilter==='past' ? 'bg-[#9A8478] text-white shadow' : 'text-[#A09890] hover:bg-[#F2F0E9]'}`}>歷史紀錄</button>
+                      <button onClick={() => setBookingStatusFilter('active')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${bookingStatusFilter==='active' ? 'bg-[#9A8478] text-white shadow' : 'text-[#A09890] hover:bg-[#F2F0E9]'}`}>入住中</button>
+                      <button onClick={() => setBookingStatusFilter('upcoming')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${bookingStatusFilter==='upcoming' ? 'bg-[#9A8478] text-white shadow' : 'text-[#A09890] hover:bg-[#F2F0E9]'}`}>即將入住</button>
+                      <button onClick={() => setBookingStatusFilter('past')} className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${bookingStatusFilter==='past' ? 'bg-[#9A8478] text-white shadow' : 'text-[#A09890] hover:bg-[#F2F0E9]'}`}>歷史紀錄</button>
                 </div>
 
                 <div className="space-y-3">
@@ -901,18 +955,18 @@ export default function App() {
                                 <div key={b.id} onClick={() => handleOpenBookingModal(b.roomId, b.roomType, null, b)} className="bg-white p-4 rounded-2xl border border-[#EBE5D9] shadow-sm hover:border-[#D6CDB8] transition-all cursor-pointer flex justify-between items-center group">
                                      <div className="flex gap-4 items-center">
                                          <div className="flex flex-col items-center justify-center bg-[#F9F7F2] w-16 h-16 rounded-xl border border-[#EBE5D9] flex-shrink-0">
-                                             <span className="text-[10px] text-[#A09890] font-bold">{b.startDate.split('-')[1]}/{b.startDate.split('-')[2]}</span>
-                                             <span className="text-sm font-bold text-[#5C554F]">{days}晚</span>
+                                              <span className="text-[10px] text-[#A09890] font-bold">{b.startDate.split('-')[1]}/{b.startDate.split('-')[2]}</span>
+                                              <span className="text-sm font-bold text-[#5C554F]">{days}晚</span>
                                          </div>
                                          <div className="min-w-0">
-                                             <div className="flex items-center gap-2 mb-1">
-                                                 <span className={`text-[10px] px-2 py-0.5 rounded ${ROOM_CONFIG[b.roomType]?.tag || 'bg-gray-100'}`}>{b.roomId}</span>
-                                                 <span className="font-bold text-[#5C554F] text-lg truncate">{b.petName}</span>
-                                             </div>
-                                             <div className="text-xs text-[#A09890] flex items-center gap-2">
-                                                <User className="w-3 h-3"/> {b.ownerName}
-                                                {b.balance > 0 && <span className="text-[#C97C7C] font-bold bg-[#FFF0F0] px-1 rounded">欠款 ${b.balance}</span>}
-                                             </div>
+                                              <div className="flex items-center gap-2 mb-1">
+                                                  <span className={`text-[10px] px-2 py-0.5 rounded ${ROOM_CONFIG[b.roomType]?.tag || 'bg-gray-100'}`}>{b.roomId}</span>
+                                                  <span className="font-bold text-[#5C554F] text-lg truncate">{b.petName}</span>
+                                              </div>
+                                              <div className="text-xs text-[#A09890] flex items-center gap-2">
+                                                 <User className="w-3 h-3"/> {b.ownerName}
+                                                 {b.balance > 0 && <span className="text-[#C97C7C] font-bold bg-[#FFF0F0] px-1 rounded">欠款 ${b.balance}</span>}
+                                              </div>
                                          </div>
                                      </div>
                                      <div className="text-xs text-[#A09890] font-bold hidden sm:block">
@@ -1096,9 +1150,9 @@ export default function App() {
                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 print:grid-cols-2">
                              {customers.filter(c => c.name.includes(customerSearchQuery)).map(c => (
                                  <div key={c.id} 
-                                      onClick={() => handleOpenCustomerModal(c, true)} 
-                                      className="border border-[#EBE5D9] rounded-xl p-4 hover:border-[#D6CDB8] hover:shadow-sm transition-all bg-[#FAFAFA] print:break-inside-avoid cursor-pointer" 
-                                 >
+                                       onClick={() => handleOpenCustomerModal(c, true)} 
+                                       className="border border-[#EBE5D9] rounded-xl p-4 hover:border-[#D6CDB8] hover:shadow-sm transition-all bg-[#FAFAFA] print:break-inside-avoid cursor-pointer" 
+                                   >
                                      <div className="flex justify-between items-start mb-3">
                                          <div>
                                              <div className="font-bold text-lg text-[#5C554F]">{c.name}</div>
@@ -1228,8 +1282,38 @@ export default function App() {
                       <div className="space-y-1"><label className="text-xs font-bold text-[#9E968E]">貓咪數量 (多1隻+${EXTRA_CAT_PRICE})</label><div className="flex gap-2">{[1,2,3,4].map(n=><button key={n} onClick={()=>updateBooking('catCount',n)} className={`flex-1 py-2 rounded-lg border text-sm font-bold ${bookingForm.catCount===n?'bg-[#EAE4D6] border-[#D6CDB8] text-[#8D7B68]':'bg-white'}`}>{n}隻</button>)}</div></div>
                       
                       <div className="bg-[#F9F7F2] p-4 rounded-xl border border-[#F5F0E6] grid grid-cols-2 gap-4">
-                          <div><label className="text-xs font-bold text-[#9A8478]">入住</label><input type="date" value={bookingForm.startDate} onChange={e=>updateBooking('startDate',e.target.value)} className="w-full p-2 rounded-lg border mt-1"/><input type="time" value={bookingForm.checkInTime} onChange={e=>updateBooking('checkInTime',e.target.value)} className="w-full mt-1 bg-transparent text-xs"/></div>
-                          <div><label className="text-xs font-bold text-[#9A8478]">退房</label><input type="date" value={bookingForm.endDate} onChange={e=>updateBooking('endDate',e.target.value)} className="w-full p-2 rounded-lg border mt-1"/><input type="time" value={bookingForm.checkOutTime} onChange={e=>updateBooking('checkOutTime',e.target.value)} className="w-full mt-1 bg-transparent text-xs"/></div>
+                          <div>
+                            <label className="text-xs font-bold text-[#9A8478]">入住</label>
+                            <input type="date" value={bookingForm.startDate} onChange={e=>updateBooking('startDate',e.target.value)} className="w-full p-2 rounded-lg border mt-1"/>
+                            <input type="time" value={bookingForm.checkInTime} onChange={e=>updateBooking('checkInTime',e.target.value)} className="w-full mt-1 bg-transparent text-xs"/>
+                            {/* 入住提示 */}
+                            {dateHints.start.length > 0 && (
+                                <div className="mt-2 space-y-1">
+                                    {dateHints.start.map((h, i) => (
+                                        <div key={i} className={`text-[10px] flex items-center gap-1 ${h.type==='danger' ? 'text-[#C97C7C] font-bold' : 'text-[#A09890]'}`}>
+                                            {h.type==='danger' && <AlertTriangle className="w-3 h-3"/>}
+                                            {h.msg}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-[#9A8478]">退房</label>
+                            <input type="date" value={bookingForm.endDate} onChange={e=>updateBooking('endDate',e.target.value)} className="w-full p-2 rounded-lg border mt-1"/>
+                            <input type="time" value={bookingForm.checkOutTime} onChange={e=>updateBooking('checkOutTime',e.target.value)} className="w-full mt-1 bg-transparent text-xs"/>
+                            {/* 退房提示 */}
+                            {dateHints.end.length > 0 && (
+                                <div className="mt-2 space-y-1">
+                                    {dateHints.end.map((h, i) => (
+                                        <div key={i} className={`text-[10px] flex items-center gap-1 ${h.type==='danger' ? 'text-[#C97C7C] font-bold' : 'text-[#A09890]'}`}>
+                                            {h.type==='danger' && <AlertTriangle className="w-3 h-3"/>}
+                                            {h.msg}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                          </div>
                       </div>
 
                       {estimatedInfo && <div className="bg-[#FFFDF5] p-3 rounded-lg border border-[#FFE4B5] text-[#D4A017] text-sm flex justify-between items-center font-bold"><span>共 {estimatedInfo.days} 晚</span><span>${estimatedInfo.total.toLocaleString()}</span></div>}
@@ -1453,8 +1537,8 @@ export default function App() {
 
       {/* Reminder Modal - 防當機修復版 */}
       {isReminderModalOpen && reminders && (
-           <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-                <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
+            <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                 <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col max-h-[80vh] overflow-hidden">
                     <div className="px-6 py-4 bg-[#F9F7F2] border-b border-[#EBE5D9] flex justify-between items-center">
                         <h3 className="font-bold flex gap-2 text-[#5C554F] items-center">
                             <Bell className="w-5 h-5 text-[#9A8478]"/> 明日提醒
