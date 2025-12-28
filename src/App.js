@@ -268,7 +268,6 @@ export default function App() {
   };
 
   // --- Logic Helpers ---
-  // ★ 修正點：加強防呆，避免 p 為 null/undefined 時當機
   const getPetName = (p) => {
       if (!p) return '';
       return typeof p === 'string' ? p : (p.name || '');
@@ -315,38 +314,33 @@ export default function App() {
 
   // --- NEW: Daily Schedule Logic (一人作業專用) ---
   const dailySchedule = useMemo(() => {
-      // 1. 先排除自己正在編輯的預約，避免干擾
       const otherBookings = bookings.filter(b => String(b.id) !== String(editingBookingId));
 
-      // 2. 定義產生當日行程表的函數
       const getScheduleForDate = (dateStr) => {
           if(!dateStr) return [];
           const events = [];
           
           otherBookings.forEach(b => {
-              // 有人這天入住
               if (b.startDate === dateStr) {
                   events.push({
                       time: b.checkInTime || '14:00',
                       type: 'check-in',
-                      room: b.roomId, // 修正括號內顯示房號
+                      room: b.roomId, 
                       label: `${b.roomId}房 ${b.petName} 入住`,
                       isConflict: false 
                   });
               }
-              // 有人這天退房
               if (b.endDate === dateStr) {
                   events.push({
                       time: b.checkOutTime || '11:00',
                       type: 'check-out',
-                      room: b.roomId, // 修正括號內顯示房號
+                      room: b.roomId, 
                       label: `${b.roomId}房 ${b.petName} 退房`,
                       isConflict: false
                   });
               }
           });
 
-          // 根據時間排序
           return events.sort((a,b) => a.time.localeCompare(b.time));
       };
 
@@ -358,9 +352,7 @@ export default function App() {
 
   // 檢查是否真的選擇了衝突時間 (最後防線)
   const timeConflictWarning = useMemo(() => {
-     // 檢查入住時間衝突
      const startConflict = dailySchedule.startDayEvents.find(e => e.time === bookingForm.checkInTime);
-     // 檢查退房時間衝突
      const endConflict = dailySchedule.endDayEvents.find(e => e.time === bookingForm.checkOutTime);
      
      if (startConflict) return `⚠️ 入住時間衝突：${startConflict.label}`;
@@ -403,7 +395,7 @@ export default function App() {
         setBookingForm({
             ownerName: booking.ownerName || '',
             petName: booking.petName || '',
-            phone: booking.phone || '',
+            phone: booking.phone || '', // 防呆
             startDate: booking.startDate,
             endDate: booking.endDate,
             checkInTime: booking.checkInTime || '14:00',
@@ -457,12 +449,8 @@ export default function App() {
     try {
         // 4. 房間物理衝突檢查
         const conflict = bookings.find(b => {
-            // 如果是編輯模式，先排除自己 (轉字串比較最保險)
             if (editingBookingId && String(b.id) === String(editingBookingId)) return false;
-            
-            // 強制轉字串比較 Room ID，避免數字與字串不符
             const isSameRoom = String(b.roomId) === String(selectedRoom.id);
-            
             return (
                 isSameRoom && 
                 isDateOverlap(b.startDate, b.endDate, bookingForm.startDate, bookingForm.endDate)
@@ -483,6 +471,8 @@ export default function App() {
             catCount: parseInt(bookingForm.catCount) || 1,
             roomId: selectedRoom.id, 
             roomType: selectedRoom.type,
+            phone: bookingForm.phone || '', // ★ 關鍵修正：確保不會送出 undefined
+            notes: bookingForm.notes || '', // ★ 關鍵修正：確保不會送出 undefined
             updatedAt: new Date().toISOString()
         };
         
@@ -509,7 +499,7 @@ export default function App() {
   const handleSaveCustomerFromBooking = async () => {
       const newPet = { ...DEFAULT_PET, name: bookingForm.petName };
       await addDoc(getPath('customers'), {
-          name: bookingForm.ownerName, phone: bookingForm.phone, pets: [newPet], 
+          name: bookingForm.ownerName, phone: bookingForm.phone || '', pets: [newPet], 
           notes: '預約自動建立', createdBy: user?.email || 'Anon', createdAt: new Date().toISOString()
       });
       showToast('客戶建立成功');
@@ -635,7 +625,13 @@ export default function App() {
   const handleSignOut = async () => { try { await signOut(auth); showToast('已登出'); } catch(e) { console.error(e); } };
 
   // --- Search & Filter ---
-  const allPetsList = useMemo(() => customers.flatMap(c => (c.pets || []).map(p => ({ petName: getPetName(p), ownerName: c.name, phone: c.phone }))), [customers]);
+  // ★ 修正點：確保 phone 不為 undefined
+  const allPetsList = useMemo(() => customers.flatMap(c => (c.pets || []).map(p => ({ 
+      petName: getPetName(p), 
+      ownerName: c.name, 
+      phone: c.phone || '' 
+  }))), [customers]);
+
   const petSuggestions = useMemo(() => {
       const q = bookingForm.petName.toLowerCase();
       if (!q) return [];
@@ -694,12 +690,12 @@ export default function App() {
 
   const selectCustomerSuggestion = (c) => {
       const firstPetName = c.pets && c.pets.length > 0 ? getPetName(c.pets[0]) : '';
-      setBookingForm(p => ({...p, ownerName: c.name, phone: c.phone, petName: firstPetName }));
+      setBookingForm(p => ({...p, ownerName: c.name, phone: c.phone || '', petName: firstPetName })); // ★ 修正：防呆
       setShowNameSuggestions(false);
   };
 
   const selectPetSuggestion = (item) => {
-      setBookingForm(prev => ({ ...prev, petName: item.petName, ownerName: item.ownerName, phone: item.phone }));
+      setBookingForm(prev => ({ ...prev, petName: item.petName, ownerName: item.ownerName, phone: item.phone || '' })); // ★ 修正：防呆
       setShowPetSuggestions(false); setShowNameSuggestions(false); 
   };
 
