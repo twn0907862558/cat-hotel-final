@@ -334,6 +334,7 @@ export default function App() {
                   events.push({
                       time: b.checkOutTime || '11:00',
                       type: 'check-out',
+                      room: b.roomId,
                       label: `${b.roomId}房 ${b.petName} 退房`,
                       isConflict: false
                   });
