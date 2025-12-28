@@ -308,58 +308,58 @@ export default function App() {
       return { days, total: days * (basePrice + extraFee), basePrice, extraFee };
   }, [selectedRoom, bookingForm.startDate, bookingForm.endDate, bookingForm.catCount]);
 
-  // --- NEW: Date Hint/Conflict Logic ---
-  const dateHints = useMemo(() => {
-    if (!selectedRoom) return { start: [], end: [] };
-    
-    // 找出同房號的預約 (排除自己正在編輯的)
-    const roomBookings = bookings.filter(b => 
-        String(b.roomId) === String(selectedRoom.id) && 
-        String(b.id) !== String(editingBookingId)
-    );
+  // --- NEW: Daily Schedule Logic (一人作業專用) ---
+  const dailySchedule = useMemo(() => {
+      // 1. 先排除自己正在編輯的預約，避免干擾
+      const otherBookings = bookings.filter(b => String(b.id) !== String(editingBookingId));
 
-    const getHintsForDate = (dateStr, isStart) => {
-        if (!dateStr) return [];
-        const hints = [];
-        roomBookings.forEach(b => {
-            // 檢查入住日
-            if (isStart) {
-                // 如果有人在這天退房 -> 提示前房客資訊
-                if (b.endDate === dateStr) {
-                    hints.push({ type: 'info', msg: `前房客 (${b.petName}) 於 ${b.checkOutTime || '11:00'} 退房` });
-                }
-                // 如果有人在這天入住 -> 衝突
-                if (b.startDate === dateStr) {
-                    hints.push({ type: 'danger', msg: `⚠️ 撞期：${b.petName} 於 ${b.checkInTime || '14:00'} 入住` });
-                }
-                // 如果這個日期落在別人入住期間
-                if (dateStr > b.startDate && dateStr < b.endDate) {
-                    hints.push({ type: 'danger', msg: `⚠️ 撞期：${b.petName} 入住中 (${b.startDate}~${b.endDate})` });
-                }
-            } 
-            // 檢查退房日
-            else {
-                // 如果有人在這天入住 -> 提示下房客資訊
-                if (b.startDate === dateStr) {
-                    hints.push({ type: 'info', msg: `下位房客 (${b.petName}) 於 ${b.checkInTime || '14:00'} 入住` });
-                }
-                // 如果有人在這天退房 -> 衝突
-                if (b.endDate === dateStr) {
-                     hints.push({ type: 'danger', msg: `⚠️ 撞期：${b.petName} 於 ${b.checkOutTime || '11:00'} 退房` });
-                }
-                if (dateStr > b.startDate && dateStr < b.endDate) {
-                    hints.push({ type: 'danger', msg: `⚠️ 撞期：${b.petName} 入住中 (${b.startDate}~${b.endDate})` });
-                }
-            }
-        });
-        return hints;
-    };
+      // 2. 定義產生當日行程表的函數
+      const getScheduleForDate = (dateStr) => {
+          if(!dateStr) return [];
+          const events = [];
+          
+          otherBookings.forEach(b => {
+              // 有人這天入住
+              if (b.startDate === dateStr) {
+                  events.push({
+                      time: b.checkInTime || '14:00',
+                      type: 'check-in',
+                      label: `${b.roomId}房 ${b.petName} 入住`,
+                      isConflict: false // 預設不是衝突，只是行程
+                  });
+              }
+              // 有人這天退房
+              if (b.endDate === dateStr) {
+                  events.push({
+                      time: b.checkOutTime || '11:00',
+                      type: 'check-out',
+                      label: `${b.roomId}房 ${b.petName} 退房`,
+                      isConflict: false
+                  });
+              }
+          });
 
-    return {
-        start: getHintsForDate(bookingForm.startDate, true),
-        end: getHintsForDate(bookingForm.endDate, false)
-    };
-  }, [bookings, selectedRoom, editingBookingId, bookingForm.startDate, bookingForm.endDate]);
+          // 根據時間排序，讓你一眼看出時間流
+          return events.sort((a,b) => a.time.localeCompare(b.time));
+      };
+
+      return {
+          startDayEvents: getScheduleForDate(bookingForm.startDate),
+          endDayEvents: getScheduleForDate(bookingForm.endDate)
+      };
+  }, [bookings, editingBookingId, bookingForm.startDate, bookingForm.endDate]);
+
+  // 檢查是否真的選擇了衝突時間 (最後防線)
+  const timeConflictWarning = useMemo(() => {
+     // 檢查入住時間衝突
+     const startConflict = dailySchedule.startDayEvents.find(e => e.time === bookingForm.checkInTime);
+     // 檢查退房時間衝突
+     const endConflict = dailySchedule.endDayEvents.find(e => e.time === bookingForm.checkOutTime);
+     
+     if (startConflict) return `⚠️ 入住時間衝突：${startConflict.label}`;
+     if (endConflict) return `⚠️ 退房時間衝突：${endConflict.label}`;
+     return null;
+  }, [dailySchedule, bookingForm.checkInTime, bookingForm.checkOutTime]);
 
 
   // --- Form Updates ---
@@ -433,16 +433,22 @@ export default function App() {
         return; 
     }
 
-    // 2. 金額防呆檢查 (新增)
+    // 2. 金額防呆檢查
     if (bookingForm.totalAmount === '' || parseInt(bookingForm.totalAmount) < 0) {
         setFormError('總金額不能為空或負數');
         return;
     }
     
+    // 3. 人力時間衝突檢查 (最後一道牆)
+    if (timeConflictWarning) {
+        setFormError(timeConflictWarning);
+        return;
+    }
+
     setIsSubmitting(true);
 
     try {
-        // 3. 衝突檢查 (強化版)
+        // 4. 房間物理衝突檢查
         const conflict = bookings.find(b => {
             // 如果是編輯模式，先排除自己 (轉字串比較最保險)
             if (editingBookingId && String(b.id) === String(editingBookingId)) return false;
@@ -457,7 +463,7 @@ export default function App() {
         });
 
         if (conflict) { 
-            setFormError(`時間衝突！此時段已被 ${conflict.petName} 預約`);
+            setFormError(`房間衝突！此時段 ${conflict.roomId}號房 已被 ${conflict.petName} 預約`);
             setIsSubmitting(false);
             return; 
         }
@@ -1285,34 +1291,43 @@ export default function App() {
                           <div>
                             <label className="text-xs font-bold text-[#9A8478]">入住</label>
                             <input type="date" value={bookingForm.startDate} onChange={e=>updateBooking('startDate',e.target.value)} className="w-full p-2 rounded-lg border mt-1"/>
-                            <input type="time" value={bookingForm.checkInTime} onChange={e=>updateBooking('checkInTime',e.target.value)} className="w-full mt-1 bg-transparent text-xs"/>
-                            {/* 入住提示 */}
-                            {dateHints.start.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                    {dateHints.start.map((h, i) => (
-                                        <div key={i} className={`text-[10px] flex items-center gap-1 ${h.type==='danger' ? 'text-[#C97C7C] font-bold' : 'text-[#A09890]'}`}>
-                                            {h.type==='danger' && <AlertTriangle className="w-3 h-3"/>}
-                                            {h.msg}
-                                        </div>
-                                    ))}
+                            
+                            {/* NEW: 當日全館行程表 (Start Date) */}
+                            {dailySchedule.startDayEvents.length > 0 ? (
+                                <div className="mt-2 text-xs bg-white p-2 rounded border border-[#EBE5D9]">
+                                    <span className="text-[#A09890] font-bold block mb-1">📅 本日忙碌時段 (全館)：</span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {dailySchedule.startDayEvents.map((item, idx) => (
+                                        <span key={idx} className={`px-1.5 py-0.5 rounded text-[10px] border ${item.type==='check-in'?'bg-blue-50 border-blue-100 text-blue-600':'bg-orange-50 border-orange-100 text-orange-600'}`}>
+                                           {item.time} {item.type==='check-in'?'入':'退'} ({item.room})
+                                        </span>
+                                      ))}
+                                    </div>
                                 </div>
-                            )}
+                            ) : <div className="mt-2 text-xs text-[#94A89A]">本日目前全館空閒</div>}
+
+                            <input type="time" value={bookingForm.checkInTime} onChange={e=>updateBooking('checkInTime',e.target.value)} className="w-full mt-2 bg-transparent text-xs"/>
                           </div>
+                          
                           <div>
                             <label className="text-xs font-bold text-[#9A8478]">退房</label>
                             <input type="date" value={bookingForm.endDate} onChange={e=>updateBooking('endDate',e.target.value)} className="w-full p-2 rounded-lg border mt-1"/>
-                            <input type="time" value={bookingForm.checkOutTime} onChange={e=>updateBooking('checkOutTime',e.target.value)} className="w-full mt-1 bg-transparent text-xs"/>
-                            {/* 退房提示 */}
-                            {dateHints.end.length > 0 && (
-                                <div className="mt-2 space-y-1">
-                                    {dateHints.end.map((h, i) => (
-                                        <div key={i} className={`text-[10px] flex items-center gap-1 ${h.type==='danger' ? 'text-[#C97C7C] font-bold' : 'text-[#A09890]'}`}>
-                                            {h.type==='danger' && <AlertTriangle className="w-3 h-3"/>}
-                                            {h.msg}
-                                        </div>
-                                    ))}
+
+                             {/* NEW: 當日全館行程表 (End Date) */}
+                             {dailySchedule.endDayEvents.length > 0 ? (
+                                <div className="mt-2 text-xs bg-white p-2 rounded border border-[#EBE5D9]">
+                                    <span className="text-[#A09890] font-bold block mb-1">📅 本日忙碌時段 (全館)：</span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {dailySchedule.endDayEvents.map((item, idx) => (
+                                        <span key={idx} className={`px-1.5 py-0.5 rounded text-[10px] border ${item.type==='check-in'?'bg-blue-50 border-blue-100 text-blue-600':'bg-orange-50 border-orange-100 text-orange-600'}`}>
+                                           {item.time} {item.type==='check-in'?'入':'退'} ({item.room})
+                                        </span>
+                                      ))}
+                                    </div>
                                 </div>
-                            )}
+                            ) : <div className="mt-2 text-xs text-[#94A89A]">本日目前全館空閒</div>}
+
+                            <input type="time" value={bookingForm.checkOutTime} onChange={e=>updateBooking('checkOutTime',e.target.value)} className="w-full mt-2 bg-transparent text-xs"/>
                           </div>
                       </div>
 
