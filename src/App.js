@@ -324,6 +324,7 @@ export default function App() {
                   events.push({
                       time: b.checkInTime || '14:00',
                       type: 'check-in',
+                      room: b.roomId,
                       label: `${b.roomId}房 ${b.petName} 入住`,
                       isConflict: false // 預設不是衝突，只是行程
                   });
