@@ -268,9 +268,14 @@ export default function App() {
   };
 
   // --- Logic Helpers ---
-  const getPetName = (p) => typeof p === 'string' ? p : p.name;
+  // ★ 修正點：加強防呆，避免 p 為 null/undefined 時當機
+  const getPetName = (p) => {
+      if (!p) return '';
+      return typeof p === 'string' ? p : (p.name || '');
+  };
   
   const getPetDetails = (p) => {
+    if (!p) return { ...DEFAULT_PET };
     if (typeof p === 'string') return { ...DEFAULT_PET, name: p };
     return { ...DEFAULT_PET, ...p };
   };
@@ -324,9 +329,9 @@ export default function App() {
                   events.push({
                       time: b.checkInTime || '14:00',
                       type: 'check-in',
-                      room: b.roomId,
+                      room: b.roomId, // 修正括號內顯示房號
                       label: `${b.roomId}房 ${b.petName} 入住`,
-                      isConflict: false // 預設不是衝突，只是行程
+                      isConflict: false 
                   });
               }
               // 有人這天退房
@@ -334,14 +339,14 @@ export default function App() {
                   events.push({
                       time: b.checkOutTime || '11:00',
                       type: 'check-out',
-                      room: b.roomId,
+                      room: b.roomId, // 修正括號內顯示房號
                       label: `${b.roomId}房 ${b.petName} 退房`,
                       isConflict: false
                   });
               }
           });
 
-          // 根據時間排序，讓你一眼看出時間流
+          // 根據時間排序
           return events.sort((a,b) => a.time.localeCompare(b.time));
       };
 
@@ -1151,12 +1156,13 @@ export default function App() {
                  
                  <div className="hidden print:block text-center mb-4"><h1 className="text-2xl font-bold">客戶名單</h1></div>
 
+                 {/* ★ 修正點：使用 filteredCustomersList 進行渲染 */}
                  <div className={`${THEME.card} rounded-2xl overflow-hidden print-card`}>
-                     {customers.filter(c => c.name.includes(customerSearchQuery)).length === 0 ? (
+                     {filteredCustomersList.length === 0 ? (
                          <div className="p-12 text-center text-[#D6CDB8]">找不到符合的客戶資料</div>
                      ) : (
                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 print:grid-cols-2">
-                             {customers.filter(c => c.name.includes(customerSearchQuery)).map(c => (
+                             {filteredCustomersList.map(c => (
                                  <div key={c.id} 
                                        onClick={() => handleOpenCustomerModal(c, true)} 
                                        className="border border-[#EBE5D9] rounded-xl p-4 hover:border-[#D6CDB8] hover:shadow-sm transition-all bg-[#FAFAFA] print:break-inside-avoid cursor-pointer" 
