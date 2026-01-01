@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar as CalendarIcon, Clock, User, Cat, Trash2, Plus, X, 
   ChevronLeft, ChevronRight, LayoutGrid, Users, Search, Save, LogIn, LogOut, UserPlus, Home, Share2,
-  Eye, Edit, Download, Upload, Image as ImageIcon, Phone, AlertCircle, CheckCircle, Info, FileText, MapPin, Heart, Shield, FileImage, AlertTriangle, Bell, Copy, MessageSquare, DollarSign, Wallet, Calculator, Check, Stethoscope, Utensils, Printer, FileSpreadsheet, Sparkles, StickyNote, List, PieChart
+  Eye, Edit, Download, Upload, Image as ImageIcon, Phone, AlertCircle, CheckCircle, Info, FileText, MapPin, Heart, Shield, FileImage, AlertTriangle, Bell, Copy, MessageSquare, DollarSign, Wallet, Calculator, Check, Stethoscope, Utensils, Printer, FileSpreadsheet, Sparkles, StickyNote, List, PieChart, Archive
 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -185,6 +185,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isSpecialDateModalOpen, setIsSpecialDateModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false); // New: Export Modal
   const [authMode, setAuthMode] = useState('login');
   
   // Custom Alert/Confirm States
@@ -225,6 +226,9 @@ export default function App() {
     start: formatDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)), // 預設本月1號
     end: formatDate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)) // 預設本月最後一天
   });
+
+  // Export specific state
+  const [exportMonth, setExportMonth] = useState(formatDate(new Date()).substring(0, 7)); // YYYY-MM
 
   const reportData = useMemo(() => {
       if (!reportRange.start || !reportRange.end) return [];
@@ -276,21 +280,6 @@ export default function App() {
       });
 
   }, [bookings, reportRange]);
-
-  const handleExportReport = () => {
-      if (reportData.length === 0) return alert("無資料可匯出");
-      const csvData = reportData.map(d => ({
-          寵物名: d.petName,
-          飼主: d.ownerName,
-          電話: d.phone,
-          來訪次數: d.count,
-          總入住天數: d.totalDays,
-          總消費: d.totalSpent,
-          房號紀錄: Array.from(d.roomTypes).join('、'),
-          最後來訪: d.lastVisit
-      }));
-      downloadCSV(csvData, `區間報表_${reportRange.start}_至_${reportRange.end}.csv`);
-  };
 
   // --- Auth Init ---
   useEffect(() => {
@@ -825,13 +814,15 @@ export default function App() {
       });
   };
 
-  // --- Export Functions ---
+  // --- Consolidated Export Functions (Triggered from Modal) ---
+  
+  // 1. Export Month Report
   const handleExportMonthReport = () => {
     if (bookings.length === 0) return alert("無資料可匯出");
-    const currentMonthPrefix = formatDate(currentMonth).substring(0, 7);
-    const monthBookings = bookings.filter(b => b.startDate.startsWith(currentMonthPrefix) || b.endDate.startsWith(currentMonthPrefix));
+    const monthPrefix = exportMonth; // Use state from modal
+    const monthBookings = bookings.filter(b => b.startDate.startsWith(monthPrefix) || b.endDate.startsWith(monthPrefix));
     
-    if (monthBookings.length === 0) return alert("本月無預約資料");
+    if (monthBookings.length === 0) return alert(`${monthPrefix} 無預約資料`);
 
     const dataToExport = monthBookings.map(b => ({
       房號: b.roomId,
@@ -846,9 +837,10 @@ export default function App() {
       備註: b.notes || ''
     })).sort((a, b) => a.入住日期.localeCompare(b.入住日期));
     
-    downloadCSV(dataToExport, `${currentMonth.getFullYear()}年${currentMonth.getMonth()+1}月_月報表.csv`);
+    downloadCSV(dataToExport, `${monthPrefix}_月報表.csv`);
   };
 
+  // 2. Export Future Bookings
   const handleExportFutureBookings = () => {
       const today = formatDate(new Date());
       const futureList = bookings.filter(b => b.startDate >= today);
@@ -871,8 +863,10 @@ export default function App() {
       downloadCSV(dataToExport, `未來預約清單_${today}.csv`);
   };
   
+  // 3. Export All Customers
   const handleExportCustomers = () => {
-    const dataToExport = filteredCustomersList.map(c => {
+    if (customers.length === 0) return alert("無客戶資料");
+    const dataToExport = customers.map(c => {
         const petsStr = (c.pets || []).map(p => getPetName(p)).join('、');
         return {
             姓名: c.name, 電話: c.phone || '', 緊急聯絡人: c.emergencyName || '', 緊急電話: c.emergencyPhone || '',
@@ -880,6 +874,48 @@ export default function App() {
         };
     });
     downloadCSV(dataToExport, `客戶資料_${formatDate(new Date())}.csv`);
+  };
+
+  // 4. Export Range Analysis (Uses the reportData calculated logic)
+  // Re-implementing logic here slightly to ensure it works directly from buttons without relying on Tab State if needed
+  const handleExportRangeStats = () => {
+      if (!reportRange.start || !reportRange.end) return alert("請選擇日期區間");
+      
+      const inRangeBookings = bookings.filter(b => 
+          isDateOverlap(b.startDate, b.endDate, reportRange.start, reportRange.end)
+      );
+
+      if (inRangeBookings.length === 0) return alert("此區間無資料");
+
+      const statsMap = {};
+      inRangeBookings.forEach(b => {
+          const key = `${b.petName}-${b.ownerName}-${b.phone}`;
+          if (!statsMap[key]) {
+              statsMap[key] = {
+                  petName: b.petName, ownerName: b.ownerName, phone: b.phone,
+                  count: 0, totalDays: 0, totalSpent: 0, lastVisit: b.startDate, roomTypes: new Set()
+              };
+          }
+          statsMap[key].count += 1;
+          const days = Math.ceil((new Date(b.endDate) - new Date(b.startDate)) / 86400000);
+          statsMap[key].totalDays += days;
+          statsMap[key].totalSpent += (parseInt(b.totalAmount) || 0);
+          statsMap[key].roomTypes.add(b.roomId);
+          if (b.startDate > statsMap[key].lastVisit) statsMap[key].lastVisit = b.startDate;
+      });
+
+      const csvData = Object.values(statsMap).map(d => ({
+          寵物名: d.petName,
+          飼主: d.ownerName,
+          電話: d.phone,
+          來訪次數: d.count,
+          總入住天數: d.totalDays,
+          總消費: d.totalSpent,
+          房號紀錄: Array.from(d.roomTypes).join('、'),
+          最後來訪: d.lastVisit
+      }));
+      
+      downloadCSV(csvData, `區間報表_${reportRange.start}_至_${reportRange.end}.csv`);
   };
 
   // --- Components ---
@@ -923,6 +959,11 @@ export default function App() {
                 <NavButton id="report" icon={PieChart} label="報表" />
             </div>
             
+            {/* 統一匯出按鈕 */}
+            <button onClick={() => setIsExportModalOpen(true)} className="p-2.5 bg-white border border-[#EBE5D9] rounded-full relative shadow-sm hover:bg-gray-50 transition-colors group" title="匯出資料">
+                <Archive className="w-5 h-5 text-[#8D7B68]"/>
+            </button>
+
             <button onClick={() => setIsReminderModalOpen(true)} className="p-2.5 bg-white border border-[#EBE5D9] rounded-full relative shadow-sm hover:bg-gray-50 transition-colors">
                 <Bell className="w-5 h-5 text-[#9A8478]"/>
                 {(reminders.ins.length + reminders.outs.length) > 0 && <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#C97C7C] rounded-full animate-pulse"></span>}
@@ -951,9 +992,6 @@ export default function App() {
                     <div className="flex gap-2 w-full sm:w-auto">
                         <button onClick={() => handleOpenBookingModal()} className={`${THEME.primary} text-white px-5 py-2.5 rounded-xl shadow-md flex items-center gap-2 text-sm font-bold w-full sm:w-auto justify-center`}>
                             <Plus className="w-4 h-4"/> 新增預約
-                        </button>
-                        <button onClick={handleExportFutureBookings} className="bg-white border border-[#EBE5D9] text-[#8D7B68] px-4 py-2.5 rounded-xl shadow-sm flex items-center gap-2 text-sm font-bold w-full sm:w-auto justify-center hover:bg-[#F9F7F2]">
-                            <FileSpreadsheet className="w-4 h-4"/> 匯出未入住
                         </button>
                     </div>
                     
@@ -1014,7 +1052,7 @@ export default function App() {
             </div>
         )}
 
-        {/* --- BOOKING LIST TAB (NEW) --- */}
+        {/* --- BOOKING LIST TAB --- */}
         {activeTab === 'list' && (
             <div className="space-y-6 animate-in fade-in">
                 {/* Filter Tabs */}
@@ -1074,7 +1112,6 @@ export default function App() {
                     <h2 className="text-lg font-bold text-[#5C554F]">{currentMonth.getFullYear()}年 {currentMonth.getMonth()+1}月</h2>
                     <div className="flex gap-2 items-center">
                         <button onClick={() => setIsSpecialDateModalOpen(true)} className="flex items-center gap-2 px-3 py-1.5 bg-[#FDF2E9] text-[#D35400] rounded-lg text-sm font-bold shadow-sm hover:bg-[#FAE5D3]"><Sparkles className="w-4 h-4"/> 節日</button>
-                        <button onClick={handleExportMonthReport} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-[#EBE5D9] text-[#8D7B68] rounded-lg text-sm font-bold shadow-sm hover:bg-[#F9F7F2]"><Download className="w-4 h-4"/> 月報</button>
                         <button onClick={handlePrint} className="flex items-center gap-2 px-3 py-1.5 bg-[#F9F7F2] text-[#9A8478] rounded-lg text-sm font-bold"><Printer className="w-4 h-4"/> 列印</button>
                     </div>
                 </div>
@@ -1209,7 +1246,7 @@ export default function App() {
             </div>
         )}
 
-        {/* --- REPORT TAB (New Feature) --- */}
+        {/* --- REPORT TAB --- */}
         {activeTab === 'report' && (
             <div className="space-y-6 animate-in fade-in">
                 {/* 1. 頂部控制列 */}
@@ -1228,9 +1265,6 @@ export default function App() {
                                 <span className="text-[#D6CDB8]">➜</span>
                                 <input type="date" value={reportRange.end} onChange={e=>setReportRange({...reportRange, end:e.target.value})} className="bg-transparent text-sm font-bold text-[#5C554F] outline-none"/>
                             </div>
-                            <button onClick={handleExportReport} className="bg-[#9A8478] text-white px-4 py-2.5 rounded-xl font-bold shadow-md hover:bg-[#826A5D] flex items-center justify-center gap-2">
-                                <Download className="w-4 h-4"/> 匯出 CSV
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -1321,7 +1355,6 @@ export default function App() {
                      </div>
                      <div className="flex gap-2">
                          <button onClick={handlePrint} className="bg-white border border-[#EBE5D9] text-[#9A8478] px-4 py-3 rounded-xl shadow-sm font-bold flex items-center gap-2 hover:bg-[#F9F7F2] transition-all"><Printer className="w-5 h-5"/> 列印名單</button>
-                         <button onClick={handleExportCustomers} className="bg-white border border-[#EBE5D9] text-[#8D7B68] px-4 py-3 rounded-xl shadow-sm font-bold flex items-center gap-2 hover:bg-[#F9F7F2] transition-all"><Download className="w-5 h-5"/> 匯出 CSV</button>
                          <button onClick={() => handleOpenCustomerModal()} className={`${THEME.primary} text-white px-6 py-3 rounded-xl shadow-md font-bold flex items-center justify-center gap-2 hover:shadow-lg transition-all`}><Plus className="w-5 h-5"/> 新增客戶</button>
                      </div>
                  </div>
@@ -1365,6 +1398,58 @@ export default function App() {
              </div>
         )}
       </main>
+
+      {/* New: Data Export Modal */}
+      {isExportModalOpen && (
+          <div className="fixed inset-0 bg-[#5C554F]/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in zoom-in-95 duration-200">
+              <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden">
+                  <div className="bg-[#FDFBF7] px-6 py-4 border-b border-[#EBE5D9] flex justify-between items-center">
+                      <h3 className="font-bold text-[#5C554F] flex items-center gap-2"><Archive className="w-5 h-5 text-[#9A8478]"/> 資料匯出中心</h3>
+                      <button onClick={()=>setIsExportModalOpen(false)}><X className="text-[#A09890]"/></button>
+                  </div>
+                  <div className="p-6 space-y-6">
+                      
+                      {/* Section 1: Basic Data */}
+                      <div>
+                          <h4 className="text-xs font-bold text-[#A09890] uppercase tracking-wider mb-2">基礎資料</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                              <button onClick={handleExportCustomers} className="flex flex-col items-center justify-center p-4 bg-[#F9F7F2] border border-[#EBE5D9] rounded-xl hover:border-[#D6CDB8] transition-all gap-2">
+                                  <Users className="w-6 h-6 text-[#9A8478]"/>
+                                  <span className="text-sm font-bold text-[#5C554F]">匯出客戶資料</span>
+                              </button>
+                              <button onClick={handleExportFutureBookings} className="flex flex-col items-center justify-center p-4 bg-[#F9F7F2] border border-[#EBE5D9] rounded-xl hover:border-[#D6CDB8] transition-all gap-2">
+                                  <Clock className="w-6 h-6 text-[#8D7B68]"/>
+                                  <span className="text-sm font-bold text-[#5C554F]">匯出未來預約</span>
+                              </button>
+                          </div>
+                      </div>
+
+                      {/* Section 2: Month Report */}
+                      <div>
+                          <h4 className="text-xs font-bold text-[#A09890] uppercase tracking-wider mb-2">月報表匯出</h4>
+                          <div className="bg-white border border-[#EBE5D9] p-4 rounded-xl flex gap-2 items-center">
+                              <input type="month" value={exportMonth} onChange={e=>setExportMonth(e.target.value)} className={`flex-1 p-2 rounded-lg border ${THEME.input} text-sm`}/>
+                              <button onClick={handleExportMonthReport} className="bg-[#9A8478] text-white px-4 py-2 rounded-lg font-bold shadow-sm hover:bg-[#826A5D] text-sm whitespace-nowrap">匯出月報</button>
+                          </div>
+                      </div>
+
+                      {/* Section 3: Range Analysis */}
+                      <div>
+                          <h4 className="text-xs font-bold text-[#A09890] uppercase tracking-wider mb-2">區間統計分析</h4>
+                          <div className="bg-white border border-[#EBE5D9] p-4 rounded-xl space-y-3">
+                              <div className="flex items-center gap-2">
+                                  <input type="date" value={reportRange.start} onChange={e=>setReportRange({...reportRange, start:e.target.value})} className={`flex-1 p-2 rounded-lg border ${THEME.input} text-xs`}/>
+                                  <span className="text-[#D6CDB8]">➜</span>
+                                  <input type="date" value={reportRange.end} onChange={e=>setReportRange({...reportRange, end:e.target.value})} className={`flex-1 p-2 rounded-lg border ${THEME.input} text-xs`}/>
+                              </div>
+                              <button onClick={handleExportRangeStats} className="w-full bg-[#EAE4D6] text-[#8D7B68] py-2 rounded-lg font-bold hover:bg-[#D6CDB8] transition-colors text-sm">匯出區間統計報表 (CSV)</button>
+                          </div>
+                      </div>
+
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* 4. Special Date Modal (New) */}
       {isSpecialDateModalOpen && (
