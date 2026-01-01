@@ -185,7 +185,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isSpecialDateModalOpen, setIsSpecialDateModalOpen] = useState(false);
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false); // New: Export Modal
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false); 
   const [authMode, setAuthMode] = useState('login');
   
   // Custom Alert/Confirm States
@@ -877,7 +877,6 @@ export default function App() {
   };
 
   // 4. Export Range Analysis (Uses the reportData calculated logic)
-  // Re-implementing logic here slightly to ensure it works directly from buttons without relying on Tab State if needed
   const handleExportRangeStats = () => {
       if (!reportRange.start || !reportRange.end) return alert("請選擇日期區間");
       
@@ -975,13 +974,16 @@ export default function App() {
         </div>
       </header>
 
-      {/* Mobile Tab Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-[#EBE5D9] flex justify-around p-3 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] print:hidden">
-           <button onClick={() => setActiveTab('rooms')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='rooms' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Home className="w-5 h-5"/><span className="text-[10px]">房況</span></button>
-           <button onClick={() => setActiveTab('list')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='list' ? 'text-[#9A8478]' : 'text-gray-400'}`}><List className="w-5 h-5"/><span className="text-[10px]">列表</span></button>
-           <button onClick={() => setActiveTab('calendar')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='calendar' ? 'text-[#9A8478]' : 'text-gray-400'}`}><CalendarIcon className="w-5 h-5"/><span className="text-[10px]">月曆</span></button>
-           <button onClick={() => setActiveTab('customers')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='customers' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Users className="w-5 h-5"/><span className="text-[10px]">客戶</span></button>
-           <button onClick={() => setActiveTab('report')} className={`p-2 rounded-xl flex flex-col items-center gap-1 ${activeTab==='report' ? 'text-[#9A8478]' : 'text-gray-400'}`}><PieChart className="w-5 h-5"/><span className="text-[10px]">報表</span></button>
+      {/* Mobile Tab Bar (已修復，現在有 6 個按鈕) */}
+      <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-[#EBE5D9] flex justify-between px-4 py-3 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] print:hidden">
+           <button onClick={() => setActiveTab('rooms')} className={`flex flex-col items-center gap-1 ${activeTab==='rooms' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Home className="w-5 h-5"/><span className="text-[9px]">房況</span></button>
+           <button onClick={() => setActiveTab('list')} className={`flex flex-col items-center gap-1 ${activeTab==='list' ? 'text-[#9A8478]' : 'text-gray-400'}`}><List className="w-5 h-5"/><span className="text-[9px]">列表</span></button>
+           <button onClick={() => setActiveTab('calendar')} className={`flex flex-col items-center gap-1 ${activeTab==='calendar' ? 'text-[#9A8478]' : 'text-gray-400'}`}><CalendarIcon className="w-5 h-5"/><span className="text-[9px]">月曆</span></button>
+           <button onClick={() => setActiveTab('customers')} className={`flex flex-col items-center gap-1 ${activeTab==='customers' ? 'text-[#9A8478]' : 'text-gray-400'}`}><Users className="w-5 h-5"/><span className="text-[9px]">客戶</span></button>
+           {/* 加回來的帳務按鈕 */}
+           <button onClick={() => setActiveTab('finance')} className={`flex flex-col items-center gap-1 ${activeTab==='finance' ? 'text-[#9A8478]' : 'text-gray-400'}`}><DollarSign className="w-5 h-5"/><span className="text-[9px]">帳務</span></button>
+           {/* 新增的報表按鈕 */}
+           <button onClick={() => setActiveTab('report')} className={`flex flex-col items-center gap-1 ${activeTab==='report' ? 'text-[#9A8478]' : 'text-gray-400'}`}><PieChart className="w-5 h-5"/><span className="text-[9px]">報表</span></button>
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-6 mb-16 md:mb-0 print-full">
@@ -1186,9 +1188,9 @@ export default function App() {
             </div>
         )}
         
-        {/* --- Finance Tab --- */}
+        {/* --- Finance Tab (已修復：確保可以透過下方選單進入) --- */}
         {activeTab === 'finance' && (
-            <div className="space-y-6">
+            <div className="space-y-6 animate-in fade-in">
                 <div className={`${THEME.card} p-6 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-6`}>
                     <div className="flex items-center gap-4">
                         <div className="bg-[#F2F0E9] p-3 rounded-full"><Wallet className="w-8 h-8 text-[#9A8478]"/></div>
@@ -1354,14 +1356,13 @@ export default function App() {
                          <input type="text" placeholder="搜尋客戶姓名、電話或寵物..." value={customerSearchQuery} onChange={e => setCustomerSearchQuery(e.target.value)} className={`w-full pl-11 pr-4 py-3 rounded-xl ${THEME.input}`}/>
                      </div>
                      <div className="flex gap-2">
-                         <button onClick={handlePrint} className="bg-white border border-[#EBE5D9] text-[#9A8478] px-4 py-3 rounded-xl shadow-sm font-bold flex items-center gap-2 hover:bg-[#F9F7F2] transition-all"><Printer className="w-5 h-5"/> 列印名單</button>
+                         <button onClick={() => setIsExportModalOpen(true)} className="bg-white border border-[#EBE5D9] text-[#8D7B68] px-4 py-3 rounded-xl shadow-sm font-bold flex items-center gap-2 hover:bg-[#F9F7F2] transition-all"><Archive className="w-5 h-5"/> 匯出資料</button>
                          <button onClick={() => handleOpenCustomerModal()} className={`${THEME.primary} text-white px-6 py-3 rounded-xl shadow-md font-bold flex items-center justify-center gap-2 hover:shadow-lg transition-all`}><Plus className="w-5 h-5"/> 新增客戶</button>
                      </div>
                  </div>
                  
                  <div className="hidden print:block text-center mb-4"><h1 className="text-2xl font-bold">客戶名單</h1></div>
 
-                 {/* ★ 修正點：使用 filteredCustomersList 進行渲染 */}
                  <div className={`${THEME.card} rounded-2xl overflow-hidden print-card`}>
                      {filteredCustomersList.length === 0 ? (
                          <div className="p-12 text-center text-[#D6CDB8]">找不到符合的客戶資料</div>
